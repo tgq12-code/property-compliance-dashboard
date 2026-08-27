@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, Home, LogOut, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Home, LogOut, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 
 type PropertyRecord = {
@@ -178,10 +178,19 @@ export default function PropertiesPage() {
               <Field label="Tax collector" value={form.tax_collector_name} onChange={(v) => updateField("tax_collector_name", v)} placeholder="San Diego County Treasurer-Tax Collector" />
               <Field label="Official tax payment URL" type="url" value={form.tax_payment_url} onChange={(v) => updateField("tax_payment_url", v)} placeholder="https://..." />
               <Field label="Annual property tax" type="number" step="0.01" value={form.annual_property_tax} onChange={(v) => updateField("annual_property_tax", v)} placeholder="12846.32" />
-              <label className="flex items-center gap-3 self-end rounded-xl border border-gray-200 px-4 py-3">
+              <label className={`flex items-center gap-3 self-end rounded-xl border px-4 py-3 ${form.escrowed ? "border-emerald-200 bg-emerald-50" : "border-gray-200"}`}>
                 <input type="checkbox" checked={form.escrowed} onChange={(e) => updateField("escrowed", e.target.checked)} className="h-4 w-4" />
-                <span><span className="block text-sm font-medium text-gray-800">Taxes are escrowed</span><span className="block text-xs text-gray-500">Track it, but flag that the lender may pay it.</span></span>
+                <span>
+                  <span className="block text-sm font-medium text-gray-800">Property taxes are impounded / escrowed</span>
+                  <span className="block text-xs text-gray-500">The lender pays the property taxes. Do not create payment reminders for me.</span>
+                </span>
               </label>
+              {form.escrowed && (
+                <div className="md:col-span-2 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                  <ShieldCheck className="mt-0.5 shrink-0" size={18} />
+                  <div><span className="font-medium">Impounded property.</span> We will keep the tax information for reference, but this property will be treated as lender-paid and excluded from future property-tax payment reminders.</div>
+                </div>
+              )}
               <label className="md:col-span-2">
                 <span className="text-sm font-medium text-gray-700">Notes</span>
                 <textarea value={form.notes} onChange={(e) => updateField("notes", e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-gray-900" />
@@ -197,7 +206,7 @@ export default function PropertiesPage() {
         <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 px-6 py-5">
             <h2 className="font-semibold text-gray-950">Your properties</h2>
-            <p className="mt-1 text-sm text-gray-500">These records will later drive tax reminders and payment links.</p>
+            <p className="mt-1 text-sm text-gray-500">Impounded properties remain on file but will not require you to pay the tax directly.</p>
           </div>
           {loading ? (
             <p className="px-6 py-8 text-sm text-gray-500">Loading properties...</p>
@@ -210,9 +219,12 @@ export default function PropertiesPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {properties.map((property) => (
-                <div key={property.id} className="grid gap-4 px-6 py-5 md:grid-cols-[1.3fr_0.8fr_0.6fr_auto] md:items-center">
+                <div key={property.id} className="grid gap-4 px-6 py-5 md:grid-cols-[1.3fr_0.8fr_0.7fr_auto] md:items-center">
                   <div>
-                    <p className="font-medium text-gray-950">{property.name}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-gray-950">{property.name}</p>
+                      {property.escrowed && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">Impounded · lender pays</span>}
+                    </div>
                     <p className="mt-1 text-sm text-gray-500">{[property.street_address, property.city, property.state, property.zip].filter(Boolean).join(", ")}</p>
                     {property.apn && <p className="mt-1 text-xs text-gray-400">APN: {property.apn}</p>}
                   </div>
@@ -221,11 +233,13 @@ export default function PropertiesPage() {
                     <p className="mt-1 text-sm font-medium text-gray-800">{property.county || "Not entered"}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Annual tax</p>
-                    <p className="mt-1 text-sm font-medium text-gray-800">{property.annual_property_tax == null ? "Not entered" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(property.annual_property_tax)}</p>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Tax responsibility</p>
+                    <p className={`mt-1 text-sm font-medium ${property.escrowed ? "text-emerald-700" : "text-gray-800"}`}>{property.escrowed ? "Lender pays · no action" : "You pay directly"}</p>
+                    {!property.escrowed && <p className="mt-1 text-xs text-gray-500">{property.annual_property_tax == null ? "Tax amount not entered" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(property.annual_property_tax) + " annually"}</p>}
                   </div>
                   <div className="flex items-center gap-2 md:justify-end">
-                    {property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Pay site <ExternalLink size={14} /></a>}
+                    {!property.escrowed && property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Pay site <ExternalLink size={14} /></a>}
+                    {property.escrowed && property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">View tax site <ExternalLink size={14} /></a>}
                     <button onClick={() => deleteProperty(property.id)} className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 hover:text-red-600" aria-label="Delete property"><Trash2 size={16} /></button>
                   </div>
                 </div>
