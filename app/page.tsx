@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Building2, CalendarDays, CheckCircle2, Clock3, Home, Landmark, Plus, ReceiptText } from "lucide-react";
 
 const obligations = [
@@ -99,10 +100,10 @@ export default function HomePage() {
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <h2 className="font-semibold text-gray-950">Quick add</h2>
               <div className="mt-4 grid gap-3">
-                <button className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:bg-gray-50">
+                <Link href="/properties" className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:bg-gray-50">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"><Home size={18} /></span>
                   <span><span className="block text-sm font-medium">Add property</span><span className="block text-xs text-gray-500">Address, APN, county and tax link</span></span>
-                </button>
+                </Link>
                 <button className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:bg-gray-50">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"><Landmark size={18} /></span>
                   <span><span className="block text-sm font-medium">Add California LLC</span><span className="block text-xs text-gray-500">Auto-track $800 annual tax and LLC filing reviews</span></span>
