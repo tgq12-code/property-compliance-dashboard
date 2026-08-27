@@ -1,4 +1,4 @@
-import { Building2, CalendarDays, CheckCircle2, Clock3, Home, Plus, ReceiptText } from "lucide-react";
+import { Building2, CalendarDays, CheckCircle2, Clock3, Home, Landmark, Plus, ReceiptText } from "lucide-react";
 
 const obligations = [
   {
@@ -10,10 +10,10 @@ const obligations = [
     statusClass: "bg-amber-100 text-amber-800",
   },
   {
-    title: "Statement of Information",
+    title: "California LLC Annual Tax",
     owner: "Example Holdings LLC",
-    due: "Jan 15, 2027",
-    amount: "$20.00",
+    due: "Apr 15, 2027",
+    amount: "$800.00",
     status: "Upcoming",
     statusClass: "bg-blue-100 text-blue-800",
   },
@@ -104,8 +104,12 @@ export default function HomePage() {
                   <span><span className="block text-sm font-medium">Add property</span><span className="block text-xs text-gray-500">Address, APN, county and tax link</span></span>
                 </button>
                 <button className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:bg-gray-50">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"><Landmark size={18} /></span>
+                  <span><span className="block text-sm font-medium">Add California LLC</span><span className="block text-xs text-gray-500">Auto-track $800 annual tax and LLC filing reviews</span></span>
+                </button>
+                <button className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:bg-gray-50">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"><Building2 size={18} /></span>
-                  <span><span className="block text-sm font-medium">Add business</span><span className="block text-xs text-gray-500">Entity details and annual filings</span></span>
+                  <span><span className="block text-sm font-medium">Add other business</span><span className="block text-xs text-gray-500">Entity details and annual filings</span></span>
                 </button>
               </div>
             </div>
@@ -113,7 +117,7 @@ export default function HomePage() {
             <div className="rounded-2xl border border-gray-200 bg-gray-950 p-6 text-white shadow-sm">
               <p className="text-sm font-medium text-gray-300">Reminder system</p>
               <h2 className="mt-2 text-xl font-semibold">Never miss a deadline.</h2>
-              <p className="mt-2 text-sm leading-6 text-gray-300">Email reminders will be sent before each unpaid obligation. Calendar and SMS can be added after the MVP is live.</p>
+              <p className="mt-2 text-sm leading-6 text-gray-300">Email reminders will be sent before each unpaid obligation. California LLCs can automatically track the $800 annual tax, Form 568 review, and any additional LLC fee review.</p>
             </div>
           </div>
         </section>
