@@ -70,11 +70,11 @@ export default function DashboardPage() {
             <p className="mt-2 text-sm leading-6 text-gray-500">Track properties, escrow status, property tax details, official payment links, and future tax reminders.</p>
           </Link>
 
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-6">
+          <Link href="/businesses" className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 text-gray-600"><Building2 size={20} /></div>
             <h3 className="mt-5 text-xl font-semibold text-gray-950">Business Compliance</h3>
-            <p className="mt-2 text-sm leading-6 text-gray-500">California LLC annual tax, filings, renewals, receipts, and compliance deadlines will live here as we continue building.</p>
-          </div>
+            <p className="mt-2 text-sm leading-6 text-gray-500">Add each entity and track filings, annual taxes, licenses, renewals, official links, amounts, and due dates.</p>
+          </Link>
         </div>
       </div>
     </main>
