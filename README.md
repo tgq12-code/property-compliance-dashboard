@@ -37,3 +37,5 @@ The first version includes a dashboard UI with upcoming obligations, summary car
 - Add mark-paid workflow and payment receipts
 - Add scheduled email reminders
 - Deploy to Vercel
+
+<!-- Vercel Git integration refresh: 2026-08-27 -->
