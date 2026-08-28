@@ -18,6 +18,8 @@ type PropertyRecord = {
   tax_collector_name: string | null;
   tax_payment_url: string | null;
   annual_property_tax: number | null;
+  property_tax_year: string | null;
+  property_tax_status: string | null;
   escrowed: boolean;
   notes: string | null;
 };
@@ -52,6 +54,46 @@ const blankForm: FormState = {
   notes: "",
 };
 
+function officialTaxAuthority(state: string, county: string) {
+  const stateKey = state.trim().toUpperCase();
+  const countyKey = county.trim().toLowerCase().replace(/ county$/, "");
+
+  if (stateKey === "CA" && countyKey === "san diego") {
+    return {
+      name: "San Diego County Treasurer-Tax Collector",
+      url: "https://www.sdttc.com/",
+    };
+  }
+
+  if (stateKey === "CA" && countyKey === "alameda") {
+    return {
+      name: "Alameda County Treasurer-Tax Collector",
+      url: "https://propertytax.alamedacountyca.gov/search",
+    };
+  }
+
+  if (stateKey === "FL" && countyKey === "palm beach") {
+    return {
+      name: "Constitutional Tax Collector, Serving Palm Beach County",
+      url: "https://pbctax.publicaccessnow.com/PropertyTax.aspx",
+    };
+  }
+
+  if (stateKey === "IN" && countyKey === "tippecanoe") {
+    return {
+      name: "Tippecanoe County Treasurer",
+      url: "https://tippecanoe.in.gov/511/Property-Tax-Payments",
+    };
+  }
+
+  return null;
+}
+
+function formatTax(amount: number | null) {
+  if (amount == null) return null;
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+}
+
 export default function PropertiesPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -82,7 +124,7 @@ export default function PropertiesPage() {
 
     const { data, error } = await supabase
       .from("properties")
-      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,escrowed,notes")
+      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_status,escrowed,notes")
       .order("created_at", { ascending: false });
 
     if (error) setMessage(error.message);
@@ -144,6 +186,7 @@ export default function PropertiesPage() {
     }
 
     const annualTax = form.annual_property_tax.trim() ? Number(form.annual_property_tax) : null;
+    const authority = officialTaxAuthority(form.state, form.county);
     const payload = {
       name: form.name.trim(),
       street_address: form.street_address.trim(),
@@ -152,8 +195,8 @@ export default function PropertiesPage() {
       zip: form.zip.trim() || null,
       county: form.county.trim() || null,
       apn: form.apn.trim() || null,
-      tax_collector_name: form.tax_collector_name.trim() || null,
-      tax_payment_url: form.tax_payment_url.trim() || null,
+      tax_collector_name: authority?.name ?? form.tax_collector_name.trim() || null,
+      tax_payment_url: authority?.url ?? form.tax_payment_url.trim() || null,
       annual_property_tax: Number.isFinite(annualTax) ? annualTax : null,
       escrowed: form.escrowed,
       notes: form.notes.trim() || null,
@@ -169,7 +212,7 @@ export default function PropertiesPage() {
       setForm(blankForm);
       setShowForm(false);
       setEditingId(null);
-      setMessage(editingId ? "Property updated." : "Property saved.");
+      setMessage(editingId ? "Property updated." : "Property saved. Official county tax site added automatically when available.");
       await loadProperties();
     }
     setSaving(false);
@@ -212,7 +255,7 @@ export default function PropertiesPage() {
           <section className="mb-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-gray-950">{editingId ? "Edit property" : "Add property"}</h2>
-              <p className="mt-1 text-sm text-gray-500">{editingId ? "Update any property, tax, payment, or impound details below." : "You can fill in only what you know now and add tax details later."}</p>
+              <p className="mt-1 text-sm text-gray-500">{editingId ? "Update any property, tax, payment, or impound details below." : "Enter the property details. For supported counties, the official tax collector and payment site are filled automatically."}</p>
             </div>
             <form onSubmit={saveProperty} className="grid gap-5 md:grid-cols-2">
               <Field label="Property name" required value={form.name} onChange={(v) => updateField("name", v)} placeholder="La Mesa Rental" />
@@ -224,8 +267,8 @@ export default function PropertiesPage() {
               </div>
               <Field label="County" value={form.county} onChange={(v) => updateField("county", v)} placeholder="San Diego" />
               <Field label="APN / Parcel number" value={form.apn} onChange={(v) => updateField("apn", v)} />
-              <Field label="Tax collector" value={form.tax_collector_name} onChange={(v) => updateField("tax_collector_name", v)} placeholder="San Diego County Treasurer-Tax Collector" />
-              <Field label="Official tax payment URL" type="url" value={form.tax_payment_url} onChange={(v) => updateField("tax_payment_url", v)} placeholder="https://..." />
+              <Field label="Tax collector" value={form.tax_collector_name} onChange={(v) => updateField("tax_collector_name", v)} placeholder="Auto-filled for supported counties" />
+              <Field label="Official tax payment URL" type="url" value={form.tax_payment_url} onChange={(v) => updateField("tax_payment_url", v)} placeholder="Auto-filled for supported counties" />
               <Field label="Annual property tax" type="number" step="0.01" value={form.annual_property_tax} onChange={(v) => updateField("annual_property_tax", v)} placeholder="12846.32" />
               <label className={`flex items-center gap-3 self-end rounded-xl border px-4 py-3 ${form.escrowed ? "border-emerald-200 bg-emerald-50" : "border-gray-200"}`}>
                 <input type="checkbox" checked={form.escrowed} onChange={(e) => updateField("escrowed", e.target.checked)} className="h-4 w-4" />
@@ -237,7 +280,7 @@ export default function PropertiesPage() {
               {form.escrowed && (
                 <div className="md:col-span-2 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                   <ShieldCheck className="mt-0.5 shrink-0" size={18} />
-                  <div><span className="font-medium">Impounded property.</span> We will keep the tax information for reference, but this property will be treated as lender-paid and excluded from future property-tax payment reminders.</div>
+                  <div><span className="font-medium">Impounded property.</span> We will keep the tax amount and official county website for reference, but this property will be excluded from future property-tax payment reminders.</div>
                 </div>
               )}
               <label className="md:col-span-2">
@@ -255,7 +298,7 @@ export default function PropertiesPage() {
         <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 px-6 py-5">
             <h2 className="font-semibold text-gray-950">Your properties</h2>
-            <p className="mt-1 text-sm text-gray-500">Impounded properties remain on file but will not require you to pay the tax directly.</p>
+            <p className="mt-1 text-sm text-gray-500">Latest tax amount and the official county tax website are shown for reference, even when the lender pays through escrow.</p>
           </div>
           {loading ? (
             <p className="px-6 py-8 text-sm text-gray-500">Loading properties...</p>
@@ -267,33 +310,40 @@ export default function PropertiesPage() {
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {properties.map((property) => (
-                <div key={property.id} className="grid gap-4 px-6 py-5 md:grid-cols-[1.3fr_0.8fr_0.7fr_auto] md:items-center">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-gray-950">{property.name}</p>
-                      {property.escrowed && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">Impounded · lender pays</span>}
+              {properties.map((property) => {
+                const taxAmount = formatTax(property.annual_property_tax);
+                const needsConfirmation = property.property_tax_status === "needs_confirmation";
+
+                return (
+                  <div key={property.id} className="grid gap-4 px-6 py-5 md:grid-cols-[1.3fr_0.85fr_0.85fr_auto] md:items-center">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-gray-950">{property.name}</p>
+                        {property.escrowed && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">Impounded · lender pays</span>}
+                        {needsConfirmation && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">Tax amount needs confirmation</span>}
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500">{[property.street_address, property.city, property.state, property.zip].filter(Boolean).join(", ")}</p>
+                      {property.apn && <p className="mt-1 text-xs text-gray-400">APN: {property.apn}</p>}
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">{[property.street_address, property.city, property.state, property.zip].filter(Boolean).join(", ")}</p>
-                    {property.apn && <p className="mt-1 text-xs text-gray-400">APN: {property.apn}</p>}
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-400">County / tax office</p>
+                      <p className="mt-1 text-sm font-medium text-gray-800">{property.county || "Not entered"}</p>
+                      {property.tax_collector_name && <p className="mt-1 text-xs text-gray-500">{property.tax_collector_name}</p>}
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Latest tax amount</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900">{taxAmount ?? "Needs confirmation"}</p>
+                      <p className="mt-1 text-xs text-gray-500">{property.property_tax_year ? `Tax year ${property.property_tax_year}` : "Tax year not recorded"}</p>
+                      <p className={`mt-1 text-xs font-medium ${property.escrowed ? "text-emerald-700" : "text-gray-600"}`}>{property.escrowed ? "Lender pays · no action" : "You pay directly"}</p>
+                    </div>
+                    <div className="flex items-center gap-2 md:justify-end">
+                      {property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Official tax site <ExternalLink size={14} /></a>}
+                      <button onClick={() => startEdit(property)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" aria-label={`Edit ${property.name}`}><Pencil size={14} /> Edit</button>
+                      <button onClick={() => deleteProperty(property.id)} className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 hover:text-red-600" aria-label="Delete property"><Trash2 size={16} /></button>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-400">County</p>
-                    <p className="mt-1 text-sm font-medium text-gray-800">{property.county || "Not entered"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Tax responsibility</p>
-                    <p className={`mt-1 text-sm font-medium ${property.escrowed ? "text-emerald-700" : "text-gray-800"}`}>{property.escrowed ? "Lender pays · no action" : "You pay directly"}</p>
-                    {!property.escrowed && <p className="mt-1 text-xs text-gray-500">{property.annual_property_tax == null ? "Tax amount not entered" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(property.annual_property_tax) + " annually"}</p>}
-                  </div>
-                  <div className="flex items-center gap-2 md:justify-end">
-                    {!property.escrowed && property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Pay site <ExternalLink size={14} /></a>}
-                    {property.escrowed && property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">View tax site <ExternalLink size={14} /></a>}
-                    <button onClick={() => startEdit(property)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" aria-label={`Edit ${property.name}`}><Pencil size={14} /> Edit</button>
-                    <button onClick={() => deleteProperty(property.id)} className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 hover:text-red-600" aria-label="Delete property"><Trash2 size={16} /></button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
