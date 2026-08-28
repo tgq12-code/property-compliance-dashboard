@@ -26,7 +26,7 @@ type ClaimedObligationReminder = {
   due_date: string;
   reminder_day: number;
   official_payment_url: string | null;
-  recipient_email: string;
+  recipient_emails: string[];
   property_name: string | null;
   business_name: string | null;
 };
@@ -118,6 +118,8 @@ export async function GET(request: Request) {
 
   for (const item of obligations) {
     try {
+      const recipients = [...new Set((item.recipient_emails ?? []).map((email) => email.trim()).filter(Boolean))];
+      if (!recipients.length) throw new Error("No compliance reminder recipients configured.");
       const context = item.property_name || item.business_name || "Compliance item";
       const amount = money(item.amount_due);
       const due = new Date(`${item.due_date}T12:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -126,7 +128,7 @@ export async function GET(request: Request) {
       const plainText = ["VO FAMILY COMPLIANCE REMINDER", "", status, item.title, context, "", `Due date: ${due}`, amount ? `Amount: ${amount}` : null, item.official_payment_url ? `Official link: ${item.official_payment_url}` : null, "", "Please review this item before the due date.", "", "Sent automatically by the Vo Family Reminder system."].filter(Boolean).join("\n");
       const actionButton = item.official_payment_url ? `<p style="margin-top:22px"><a href="${escapeHtml(item.official_payment_url)}" style="display:inline-block;background:#2563eb;color:white;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700">Open official site</a></p>` : "";
       const html = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827;line-height:1.6"><div style="font-size:12px;letter-spacing:.14em;color:#2563eb;font-weight:700">VO FAMILY COMPLIANCE REMINDER</div><h1 style="font-size:24px;margin:10px 0 6px">${escapeHtml(item.title)}</h1><p style="margin:0 0 20px;color:#6b7280">${escapeHtml(context)}</p><div style="padding:18px;border-radius:14px;background:#eff6ff"><div style="font-weight:700;font-size:18px">${escapeHtml(status)}</div><div style="margin-top:8px"><strong>Due:</strong> ${escapeHtml(due)}</div>${amount ? `<div><strong>Amount:</strong> ${escapeHtml(amount)}</div>` : ""}</div>${actionButton}<p style="margin-top:24px;font-size:12px;color:#9ca3af">Automatic reminders are scheduled 30, 7, and 2 days before the due date. Marking an obligation paid or completed stops future reminders. Escrowed property-tax items are excluded.</p></div>`;
-      await transporter.sendMail({ from: `Vo Family Reminders <${smtpUser}>`, to: item.recipient_email, subject, text: plainText, html });
+      await transporter.sendMail({ from: `Vo Family Reminders <${smtpUser}>`, to: recipients, subject, text: plainText, html });
       const { error } = await supabase.rpc("complete_obligation_reminder_send", { p_secret: cronSecret, p_log_id: item.log_id, p_sent_at: new Date().toISOString() });
       if (error) throw error;
       obligationSent += 1;
