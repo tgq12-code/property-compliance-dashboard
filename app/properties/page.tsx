@@ -183,7 +183,7 @@ export default function PropertiesPage() {
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <div className="flex items-center gap-4">
-            <Link href="/" className="rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-50"><ArrowLeft size={17} /></Link>
+            <Link href="/dashboard" className="rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-50" aria-label="Back to family dashboard"><ArrowLeft size={17} /></Link>
             <div>
               <p className="text-sm font-medium text-gray-500">Property & Business</p>
               <h1 className="text-2xl font-semibold text-gray-950">Properties</h1>
