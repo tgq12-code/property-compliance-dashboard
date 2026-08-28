@@ -37,7 +37,7 @@ export default function HomePage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setMessage(error.message);
     else {
-      router.push("/properties");
+      router.push("/dashboard");
       router.refresh();
     }
     setLoading(false);
@@ -65,7 +65,7 @@ export default function HomePage() {
               Catmy has the grand ideas. Tuan&apos;s job is to build them... and somehow keep everything running.
             </h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-white/80 sm:text-base">
-              Property taxes, LLC deadlines, reminders, receipts, and all the other fun things nobody remembers until the last minute.
+              Property taxes, LLC deadlines, family reminders, birthdays, appointments, school dates, and all the other fun things nobody remembers until the last minute.
             </p>
             <div className="mt-5 inline-flex rounded-full border border-white/25 bg-black/35 px-4 py-2 text-sm backdrop-blur-sm">
               Current system status: Catmy is thinking of another idea. Tuan is already behind.
@@ -75,10 +75,10 @@ export default function HomePage() {
 
         <section className="flex items-center px-6 py-10 sm:px-10 lg:px-12">
           <div className="w-full">
-            <p className="text-sm font-medium text-gray-500">Property & Business Compliance</p>
+            <p className="text-sm font-medium text-gray-500">Vo Family Reminder & Compliance Dashboard</p>
             <h2 className="mt-1 text-3xl font-semibold tracking-tight text-gray-950">{title}</h2>
             <p className="mt-2 text-sm leading-6 text-gray-500">
-              {mode === "forgot" ? "Enter your email and we’ll send you a reset link." : "Sign in before viewing any property, business, tax, or compliance information."}
+              {mode === "forgot" ? "Enter your email and we’ll send you a reset link." : "Sign in before viewing family reminders, property, business, tax, or compliance information."}
             </p>
 
             <form onSubmit={submit} className="mt-8 space-y-5">
@@ -115,7 +115,7 @@ export default function HomePage() {
               </button>
             )}
 
-            <p className="mt-8 text-center text-xs text-gray-400">Private dashboard · No compliance information is shown until you sign in.</p>
+            <p className="mt-8 text-center text-xs text-gray-400">Private dashboard · No family or compliance information is shown until you sign in.</p>
           </div>
         </section>
       </div>
