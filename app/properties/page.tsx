@@ -470,8 +470,9 @@ function SectionHeading({ title, count, subtitle, tone }: { title: string; count
 }
 
 function SummaryStat({ label, value, sub, tone }: { label: string; value: string; sub: string; tone: "blue" | "green" | "violet" | "slate" }) {
-  const tones = { blue: "bg-blue-50 text-blue-700", green: "bg-emerald-50 text-emerald-700", violet: "bg-violet-50 text-violet-700", slate: "bg-slate-100 text-slate-700" };
-  return <div className="rounded-2xl border border-slate-200 bg-white p-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${tones[tone]}`}>{label}</span><p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-slate-400">{sub}</p></div>;
+  const shells = { blue: "border-sky-200 bg-sky-50", green: "border-emerald-200 bg-emerald-50", violet: "border-violet-200 bg-violet-50", slate: "border-slate-200 bg-slate-50" };
+  const labels = { blue: "text-sky-700", green: "text-emerald-700", violet: "text-violet-700", slate: "text-slate-600" };
+  return <div className={`rounded-2xl border p-4 ${shells[tone]}`}><span className={`text-xs font-semibold ${labels[tone]}`}>{label}</span><p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</p><p className="mt-1 text-xs text-slate-500">{sub}</p></div>;
 }
 
 function InfoTile({ label, value, accent = "slate" }: { label: string; value: string; accent?: "slate" | "blue" | "indigo" }) {
