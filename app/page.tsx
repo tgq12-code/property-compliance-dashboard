@@ -1,8 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+
+const RESET_COOLDOWN_SECONDS = 60;
+const RESET_COOLDOWN_KEY = "vo-family-reset-cooldown-until";
 
 export default function HomePage() {
   const router = useRouter();
@@ -11,6 +14,20 @@ export default function HomePage() {
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetCooldown, setResetCooldown] = useState(0);
+
+  useEffect(() => {
+    function updateCooldown() {
+      const until = Number(window.localStorage.getItem(RESET_COOLDOWN_KEY) || 0);
+      const seconds = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+      setResetCooldown(seconds);
+      if (seconds === 0 && until) window.localStorage.removeItem(RESET_COOLDOWN_KEY);
+    }
+
+    updateCooldown();
+    const timer = window.setInterval(updateCooldown, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -19,10 +36,32 @@ export default function HomePage() {
     const supabase = createClient();
 
     if (mode === "forgot") {
+      if (resetCooldown > 0) {
+        setMessage(`Please wait ${resetCooldown} seconds before requesting another reset email.`);
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
-      setMessage(error ? error.message : "Password reset email sent. Check your inbox and use the newest link.");
+
+      if (error) {
+        if (error.message.toLowerCase().includes("rate limit")) {
+          const until = Date.now() + RESET_COOLDOWN_SECONDS * 1000;
+          window.localStorage.setItem(RESET_COOLDOWN_KEY, String(until));
+          setResetCooldown(RESET_COOLDOWN_SECONDS);
+          setMessage("Password reset email limit reached. Please wait before trying again. The button is temporarily locked to prevent repeated requests.");
+        } else {
+          setMessage(error.message);
+        }
+      } else {
+        const until = Date.now() + RESET_COOLDOWN_SECONDS * 1000;
+        window.localStorage.setItem(RESET_COOLDOWN_KEY, String(until));
+        setResetCooldown(RESET_COOLDOWN_SECONDS);
+        setMessage("Password reset email sent. Check your inbox and use only the newest link.");
+      }
+
       setLoading(false);
       return;
     }
@@ -102,8 +141,16 @@ export default function HomePage() {
 
               {message && <p className="rounded-xl bg-gray-100 px-3 py-2.5 text-sm text-gray-700">{message}</p>}
 
-              <button disabled={loading} className="w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50">
-                {loading ? "Please wait..." : mode === "login" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
+              <button disabled={loading || (mode === "forgot" && resetCooldown > 0)} className="w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50">
+                {loading
+                  ? "Please wait..."
+                  : mode === "login"
+                    ? "Sign in"
+                    : mode === "signup"
+                      ? "Create account"
+                      : resetCooldown > 0
+                        ? `Try again in ${resetCooldown}s`
+                        : "Send reset link"}
               </button>
             </form>
 
