@@ -17,6 +17,17 @@ export default function HomePage() {
   const [resetCooldown, setResetCooldown] = useState(0);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const recoveryCode = params.get("code");
+
+    // Supabase PKCE recovery links can land on the site root first. Move the
+    // untouched one-time code to the dedicated reset page BEFORE creating a
+    // Supabase browser client, otherwise the client may consume the code here.
+    if (recoveryCode) {
+      window.location.replace(`/reset-password?code=${encodeURIComponent(recoveryCode)}`);
+      return;
+    }
+
     const supabase = createClient();
 
     function updateCooldown() {
@@ -27,10 +38,10 @@ export default function HomePage() {
     }
 
     function handleAuthRedirect() {
-      const params = new URLSearchParams(window.location.search);
+      const currentParams = new URLSearchParams(window.location.search);
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-      const errorCode = params.get("error_code") || hashParams.get("error_code");
-      const errorDescription = params.get("error_description") || hashParams.get("error_description");
+      const errorCode = currentParams.get("error_code") || hashParams.get("error_code");
+      const errorDescription = currentParams.get("error_description") || hashParams.get("error_description");
 
       if (errorCode === "otp_expired") {
         setMode("forgot");
@@ -52,9 +63,6 @@ export default function HomePage() {
       }
     });
 
-    // Some Supabase recovery links establish a session before the PASSWORD_RECOVERY
-    // event reaches this page. If the URL carries recovery tokens, send the user to
-    // the password-change screen instead of leaving them on the sign-in page.
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     if (hashParams.get("type") === "recovery" || hashParams.has("access_token")) {
       supabase.auth.getSession().then(({ data }) => {
