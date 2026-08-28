@@ -17,6 +17,8 @@ export default function HomePage() {
   const [resetCooldown, setResetCooldown] = useState(0);
 
   useEffect(() => {
+    const supabase = createClient();
+
     function updateCooldown() {
       const until = Number(window.localStorage.getItem(RESET_COOLDOWN_KEY) || 0);
       const seconds = Math.max(0, Math.ceil((until - Date.now()) / 1000));
@@ -24,10 +26,51 @@ export default function HomePage() {
       if (seconds === 0 && until) window.localStorage.removeItem(RESET_COOLDOWN_KEY);
     }
 
+    function handleAuthRedirect() {
+      const params = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const errorCode = params.get("error_code") || hashParams.get("error_code");
+      const errorDescription = params.get("error_description") || hashParams.get("error_description");
+
+      if (errorCode === "otp_expired") {
+        setMode("forgot");
+        setMessage("That password reset link has already been used or expired. Request one new reset email below and use only the newest link.");
+        window.history.replaceState({}, "", window.location.pathname);
+      } else if (errorDescription) {
+        setMessage(errorDescription.replace(/\+/g, " "));
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+
     updateCooldown();
+    handleAuthRedirect();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" && session) {
+        router.replace("/reset-password");
+        router.refresh();
+      }
+    });
+
+    // Some Supabase recovery links establish a session before the PASSWORD_RECOVERY
+    // event reaches this page. If the URL carries recovery tokens, send the user to
+    // the password-change screen instead of leaving them on the sign-in page.
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (hashParams.get("type") === "recovery" || hashParams.has("access_token")) {
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) {
+          router.replace("/reset-password");
+          router.refresh();
+        }
+      });
+    }
+
     const timer = window.setInterval(updateCooldown, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+    return () => {
+      window.clearInterval(timer);
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
