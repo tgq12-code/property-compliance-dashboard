@@ -12,15 +12,28 @@ export default function DashboardPage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) router.replace("/");
-      else setReady(true);
-    });
-  }, []);
+    let active = true;
+
+    async function verifySession() {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const { data } = await supabase.auth.getSession();
+        if (!active) return;
+        if (data.session) {
+          setReady(true);
+          return;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 200));
+      }
+      if (active) router.replace("/");
+    }
+
+    verifySession();
+    return () => { active = false; };
+  }, [router, supabase]);
 
   async function signOut() {
     await supabase.auth.signOut();
-    router.push("/");
+    router.replace("/");
   }
 
   if (!ready) return <main className="min-h-screen bg-gray-50 p-8 text-sm text-gray-500">Loading...</main>;
