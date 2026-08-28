@@ -39,6 +39,13 @@ type FormState = {
   notes: string;
 };
 
+type TaxSchedule = {
+  frequency: string;
+  cycle: string;
+  dueDates: string[];
+  note: string;
+};
+
 const blankForm: FormState = {
   name: "",
   street_address: "",
@@ -92,6 +99,72 @@ function officialTaxAuthority(state: string, county: string) {
 function formatTax(amount: number | null) {
   if (amount == null) return null;
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+}
+
+function formatDueDate(date: Date) {
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function shiftWeekendToMonday(date: Date) {
+  const shifted = new Date(date);
+  if (shifted.getDay() === 6) shifted.setDate(shifted.getDate() + 2);
+  if (shifted.getDay() === 0) shifted.setDate(shifted.getDate() + 1);
+  return shifted;
+}
+
+function getTaxSchedule(state: string | null, county: string | null): TaxSchedule | null {
+  const stateKey = (state ?? "").trim().toUpperCase();
+  const countyKey = (county ?? "").trim().toLowerCase().replace(/ county$/, "");
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  if (stateKey === "CA" && (countyKey === "san diego" || countyKey === "alameda")) {
+    const aprilDeadline = new Date(currentYear, 3, 10, 23, 59, 59);
+    const cycleStart = now > aprilDeadline ? currentYear : currentYear - 1;
+    return {
+      frequency: "2 installments",
+      cycle: `${cycleStart}-${String(cycleStart + 1).slice(-2)}`,
+      dueDates: [`Nov 1, ${cycleStart}`, `Feb 1, ${cycleStart + 1}`],
+      note: "1st installment is delinquent after Dec 10; 2nd after Apr 10.",
+    };
+  }
+
+  if (stateKey === "IN" && countyKey === "tippecanoe") {
+    const currentFallDue = currentYear === 2026
+      ? new Date(2026, 10, 10)
+      : shiftWeekendToMonday(new Date(currentYear, 10, 10));
+    const taxYear = now > currentFallDue ? currentYear + 1 : currentYear;
+    const springDue = taxYear === 2026
+      ? new Date(2026, 4, 11)
+      : shiftWeekendToMonday(new Date(taxYear, 4, 10));
+    const fallDue = taxYear === 2026
+      ? new Date(2026, 10, 10)
+      : shiftWeekendToMonday(new Date(taxYear, 10, 10));
+
+    return {
+      frequency: "2 installments",
+      cycle: String(taxYear),
+      dueDates: [formatDueDate(springDue), formatDueDate(fallDue)],
+      note: "Spring and fall installments. County shifts weekend due dates to the next business day.",
+    };
+  }
+
+  if (stateKey === "FL" && countyKey === "palm beach") {
+    const marchDeadline = new Date(currentYear, 2, 31, 23, 59, 59);
+    const taxYear = now <= marchDeadline ? currentYear - 1 : currentYear;
+    return {
+      frequency: "Annual (standard plan)",
+      cycle: String(taxYear),
+      dueDates: [`Mar 31, ${taxYear + 1}`],
+      note: `Payable beginning Nov 1, ${taxYear}; early-pay discounts apply Nov-Feb. Delinquent Apr 1, ${taxYear + 1}.`,
+    };
+  }
+
+  return null;
 }
 
 export default function PropertiesPage() {
@@ -233,7 +306,7 @@ export default function PropertiesPage() {
   return (
     <main className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
           <div>
             <Link href="/dashboard" className="block hover:opacity-80">
               <p className="text-sm font-medium text-gray-500">Vo Family Operations</p>
@@ -248,7 +321,7 @@ export default function PropertiesPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      <div className="mx-auto max-w-7xl px-6 py-8">
         {message && <div className="mb-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">{message}</div>}
 
         {showForm && (
@@ -269,7 +342,7 @@ export default function PropertiesPage() {
               <Field label="APN / Parcel number" value={form.apn} onChange={(v) => updateField("apn", v)} />
               <Field label="Tax collector" value={form.tax_collector_name} onChange={(v) => updateField("tax_collector_name", v)} placeholder="Auto-filled for supported counties" />
               <Field label="Official tax payment URL" type="url" value={form.tax_payment_url} onChange={(v) => updateField("tax_payment_url", v)} placeholder="Auto-filled for supported counties" />
-              <Field label="Annual property tax" type="number" step="0.01" value={form.annual_property_tax} onChange={(v) => updateField("annual_property_tax", v)} placeholder="12846.32" />
+              <Field label="Annual tax total (full bill)" type="number" step="0.01" value={form.annual_property_tax} onChange={(v) => updateField("annual_property_tax", v)} placeholder="12846.32" />
               <label className={`flex items-center gap-3 self-end rounded-xl border px-4 py-3 ${form.escrowed ? "border-emerald-200 bg-emerald-50" : "border-gray-200"}`}>
                 <input type="checkbox" checked={form.escrowed} onChange={(e) => updateField("escrowed", e.target.checked)} className="h-4 w-4" />
                 <span>
@@ -280,7 +353,7 @@ export default function PropertiesPage() {
               {form.escrowed && (
                 <div className="md:col-span-2 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                   <ShieldCheck className="mt-0.5 shrink-0" size={18} />
-                  <div><span className="font-medium">Impounded property.</span> We will keep the tax amount and official county website for reference, but this property will be excluded from future property-tax payment reminders.</div>
+                  <div><span className="font-medium">Impounded property.</span> We will keep the tax amount, county schedule, and official county website for reference, but this property will be excluded from future property-tax payment reminders.</div>
                 </div>
               )}
               <label className="md:col-span-2">
@@ -298,7 +371,7 @@ export default function PropertiesPage() {
         <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 px-6 py-5">
             <h2 className="font-semibold text-gray-950">Your properties</h2>
-            <p className="mt-1 text-sm text-gray-500">Latest tax amount and the official county tax website are shown for reference, even when the lender pays through escrow.</p>
+            <p className="mt-1 text-sm text-gray-500">Tax totals, county payment schedules, due dates, and official tax websites are shown for each property.</p>
           </div>
           {loading ? (
             <p className="px-6 py-8 text-sm text-gray-500">Loading properties...</p>
@@ -313,31 +386,45 @@ export default function PropertiesPage() {
               {properties.map((property) => {
                 const taxAmount = formatTax(property.annual_property_tax);
                 const needsConfirmation = property.property_tax_status === "needs_confirmation";
+                const schedule = getTaxSchedule(property.state, property.county);
 
                 return (
-                  <div key={property.id} className="grid gap-4 px-6 py-5 md:grid-cols-[1.3fr_0.85fr_0.85fr_auto] md:items-center">
+                  <div key={property.id} className="grid gap-5 px-6 py-5 md:grid-cols-[1.2fr_0.8fr_1.15fr_auto] md:items-center">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium text-gray-950">{property.name}</p>
-                        {property.escrowed && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">Impounded · lender pays</span>}
+                        {property.escrowed ? (
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">Impounded · lender pays</span>
+                        ) : (
+                          <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800">You pay</span>
+                        )}
                         {needsConfirmation && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">Tax amount needs confirmation</span>}
                       </div>
                       <p className="mt-1 text-sm text-gray-500">{[property.street_address, property.city, property.state, property.zip].filter(Boolean).join(", ")}</p>
-                      {property.apn && <p className="mt-1 text-xs text-gray-400">APN: {property.apn}</p>}
+                      <p className="mt-1 text-xs text-gray-400">{property.county ? `${property.county} County` : "County not entered"}{property.apn ? ` · APN: ${property.apn}` : ""}</p>
                     </div>
+
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">County / tax office</p>
-                      <p className="mt-1 text-sm font-medium text-gray-800">{property.county || "Not entered"}</p>
-                      {property.tax_collector_name && <p className="mt-1 text-xs text-gray-500">{property.tax_collector_name}</p>}
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Tax total</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900">{taxAmount ?? "Not confirmed"}</p>
+                      <p className="mt-1 text-xs text-gray-500">{property.property_tax_year ? `Recorded tax year: ${property.property_tax_year}` : "Tax year not recorded"}</p>
                     </div>
+
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Latest tax amount</p>
-                      <p className="mt-1 text-sm font-semibold text-gray-900">{taxAmount ?? "Needs confirmation"}</p>
-                      <p className="mt-1 text-xs text-gray-500">{property.property_tax_year ? `Tax year ${property.property_tax_year}` : "Tax year not recorded"}</p>
-                      <p className={`mt-1 text-xs font-medium ${property.escrowed ? "text-emerald-700" : "text-gray-600"}`}>{property.escrowed ? "Lender pays · no action" : "You pay directly"}</p>
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Payment schedule</p>
+                      {schedule ? (
+                        <>
+                          <p className="mt-1 text-sm font-semibold text-gray-900">{schedule.frequency} · {schedule.cycle}</p>
+                          <p className="mt-1 text-sm text-gray-700">Due: {schedule.dueDates.join(" · ")}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-gray-500">{schedule.note}</p>
+                        </>
+                      ) : (
+                        <p className="mt-1 text-sm font-medium text-amber-700">Schedule needs confirmation</p>
+                      )}
                     </div>
+
                     <div className="flex items-center gap-2 md:justify-end">
-                      {property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Official tax site <ExternalLink size={14} /></a>}
+                      {property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">{property.escrowed ? "View tax site" : "Pay site"} <ExternalLink size={14} /></a>}
                       <button onClick={() => startEdit(property)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" aria-label={`Edit ${property.name}`}><Pencil size={14} /> Edit</button>
                       <button onClick={() => deleteProperty(property.id)} className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 hover:text-red-600" aria-label="Delete property"><Trash2 size={16} /></button>
                     </div>
