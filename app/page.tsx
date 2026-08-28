@@ -155,7 +155,7 @@ export default function HomePage() {
               Catmy has the grand ideas. Tuan&apos;s job is to build them... and somehow keep everything running.
             </h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-white/80 sm:text-base">
-              Property taxes, LLC deadlines, family reminders, birthdays, appointments, school dates, and all the other fun things nobody remembers until the last minute.
+              Property taxes, LLC deadlines, family reminders and all the other fun things nobody remembers until the last minute.
             </p>
             <div className="mt-5 inline-flex rounded-full border border-white/25 bg-black/35 px-4 py-2 text-sm backdrop-blur-sm">
               Current system status: Catmy is thinking of another idea. Tuan is already behind.
