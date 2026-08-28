@@ -160,18 +160,11 @@ export default function HomePage() {
     <main className="min-h-screen bg-gray-950 px-4 py-8 sm:px-6 lg:py-12">
       <div className="mx-auto grid min-h-[calc(100vh-6rem)] max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl lg:grid-cols-[1.2fr_0.8fr]">
         <section className="relative min-h-[430px] overflow-hidden bg-gray-900 lg:min-h-full">
-          <img src="/welcome-photo.jpg" alt="Family trip" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/10" />
-
-          <div className="absolute left-[11%] top-[18%] rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold tracking-wide text-gray-950 shadow-lg">CATMY: GRAND IDEAS DEPARTMENT</div>
-          <div className="absolute right-[5%] top-[12%] rounded-full bg-gray-950/90 px-3 py-1.5 text-xs font-bold tracking-wide text-white shadow-lg">TUAN: IMPLEMENTATION DEPARTMENT</div>
-
-          <div className="absolute inset-x-0 bottom-0 p-6 text-white sm:p-8 lg:p-10">
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/70">Vo Family Operations</p>
-            <h1 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight sm:text-4xl">Catmy has the grand ideas. Tuan&apos;s job is to build them... and somehow keep everything running.</h1>
-            <p className="mt-4 max-w-xl text-sm leading-6 text-white/80 sm:text-base">Property taxes, LLC deadlines, family reminders and all the other fun things nobody remembers until the last minute.</p>
-            <div className="mt-5 inline-flex rounded-full border border-white/25 bg-black/35 px-4 py-2 text-sm backdrop-blur-sm">Current system status: Catmy is thinking of another idea. Tuan is already behind.</div>
-          </div>
+          <img
+            src="/welcome-cartoon.jpg"
+            alt="Vo Family Operations cartoon with Catmy's Grand Ideas Department and Tuan's Implementation Department"
+            className="absolute inset-0 h-full w-full object-cover object-center"
+          />
         </section>
 
         <section className="flex items-center px-6 py-10 sm:px-10 lg:px-12">
