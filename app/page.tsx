@@ -1,125 +1,121 @@
-import Link from "next/link";
-import { Building2, CalendarDays, CheckCircle2, Clock3, Home, Landmark, Plus, ReceiptText } from "lucide-react";
+"use client";
 
-const obligations = [
-  {
-    title: "1st Installment Property Tax",
-    owner: "San Diego Rental",
-    due: "Dec 10, 2026",
-    amount: "$6,423.16",
-    status: "Due Soon",
-    statusClass: "bg-amber-100 text-amber-800",
-  },
-  {
-    title: "California LLC Annual Tax",
-    owner: "Example Holdings LLC",
-    due: "Apr 15, 2027",
-    amount: "$800.00",
-    status: "Upcoming",
-    statusClass: "bg-blue-100 text-blue-800",
-  },
-  {
-    title: "2nd Installment Property Tax",
-    owner: "Oakland Rental",
-    due: "Apr 10, 2027",
-    amount: "$4,850.00",
-    status: "Upcoming",
-    statusClass: "bg-blue-100 text-blue-800",
-  },
-];
-
-const cards = [
-  { label: "Due in 30 days", value: "1", icon: Clock3 },
-  { label: "Due in 60 days", value: "2", icon: CalendarDays },
-  { label: "Overdue", value: "0", icon: ReceiptText },
-  { label: "Paid this year", value: "$14,225", icon: CheckCircle2 },
-];
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase-browser";
 
 export default function HomePage() {
-  return (
-    <main className="min-h-screen">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <div>
-            <p className="text-sm font-medium text-gray-500">Property & Business</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-950">Compliance Dashboard</h1>
-          </div>
-          <button className="inline-flex items-center gap-2 rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-gray-800">
-            <Plus size={16} /> Add obligation
-          </button>
-        </div>
-      </header>
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {cards.map(({ label, value, icon: Icon }) => (
-            <div key={label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700">
-                <Icon size={19} />
-              </div>
-              <div className="text-2xl font-semibold text-gray-950">{value}</div>
-              <div className="mt-1 text-sm text-gray-500">{label}</div>
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage("");
+    const supabase = createClient();
+
+    if (mode === "forgot") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      setMessage(error ? error.message : "Password reset email sent. Check your inbox and use the newest link.");
+      setLoading(false);
+      return;
+    }
+
+    if (mode === "signup") {
+      const { error } = await supabase.auth.signUp({ email, password });
+      setMessage(error ? error.message : "Account created. Check your email if confirmation is required.");
+      setLoading(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setMessage(error.message);
+    else {
+      router.push("/properties");
+      router.refresh();
+    }
+    setLoading(false);
+  }
+
+  const title = mode === "login" ? "Welcome back" : mode === "signup" ? "Create account" : "Reset password";
+
+  return (
+    <main className="min-h-screen bg-gray-950 px-4 py-8 sm:px-6 lg:py-12">
+      <div className="mx-auto grid min-h-[calc(100vh-6rem)] max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl lg:grid-cols-[1.2fr_0.8fr]">
+        <section className="relative min-h-[430px] overflow-hidden bg-gray-900 lg:min-h-full">
+          <img src="/welcome-photo.jpg" alt="Catmy and Tuan having fun on a trip" className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/10" />
+
+          <div className="absolute left-[11%] top-[18%] rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold tracking-wide text-gray-950 shadow-lg">
+            CATMY: GRAND IDEAS DEPARTMENT
+          </div>
+          <div className="absolute right-[5%] top-[12%] rounded-full bg-gray-950/90 px-3 py-1.5 text-xs font-bold tracking-wide text-white shadow-lg">
+            TUAN: IMPLEMENTATION DEPARTMENT
+          </div>
+
+          <div className="absolute inset-x-0 bottom-0 p-6 text-white sm:p-8 lg:p-10">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/70">Vo Family Operations</p>
+            <h1 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight sm:text-4xl">
+              Catmy has the grand ideas. Tuan&apos;s job is to build them... and somehow keep everything running.
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-white/80 sm:text-base">
+              Property taxes, LLC deadlines, reminders, receipts, and all the other fun things nobody remembers until the last minute.
+            </p>
+            <div className="mt-5 inline-flex rounded-full border border-white/25 bg-black/35 px-4 py-2 text-sm backdrop-blur-sm">
+              Current system status: Catmy is thinking of another idea. Tuan is already behind.
             </div>
-          ))}
+          </div>
         </section>
 
-        <section className="mt-8 grid gap-6 xl:grid-cols-[1.5fr_0.7fr]">
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
-              <div>
-                <h2 className="font-semibold text-gray-950">Upcoming obligations</h2>
-                <p className="mt-1 text-sm text-gray-500">Your next property taxes, filings, fees, and renewals.</p>
-              </div>
-              <button className="text-sm font-medium text-gray-700 hover:text-gray-950">View all</button>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {obligations.map((item) => (
-                <div key={`${item.title}-${item.owner}`} className="grid gap-4 px-6 py-5 md:grid-cols-[1.4fr_0.8fr_0.6fr_auto] md:items-center">
-                  <div>
-                    <p className="font-medium text-gray-950">{item.title}</p>
-                    <p className="mt-1 text-sm text-gray-500">{item.owner}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Due</p>
-                    <p className="mt-1 text-sm font-medium text-gray-900">{item.due}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Amount</p>
-                    <p className="mt-1 text-sm font-medium text-gray-900">{item.amount}</p>
-                  </div>
-                  <div className="flex items-center gap-3 md:justify-end">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.statusClass}`}>{item.status}</span>
-                    <button className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Details</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        <section className="flex items-center px-6 py-10 sm:px-10 lg:px-12">
+          <div className="w-full">
+            <p className="text-sm font-medium text-gray-500">Property & Business Compliance</p>
+            <h2 className="mt-1 text-3xl font-semibold tracking-tight text-gray-950">{title}</h2>
+            <p className="mt-2 text-sm leading-6 text-gray-500">
+              {mode === "forgot" ? "Enter your email and we’ll send you a reset link." : "Sign in before viewing any property, business, tax, or compliance information."}
+            </p>
 
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <h2 className="font-semibold text-gray-950">Quick add</h2>
-              <div className="mt-4 grid gap-3">
-                <Link href="/properties" className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:bg-gray-50">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"><Home size={18} /></span>
-                  <span><span className="block text-sm font-medium">Add property</span><span className="block text-xs text-gray-500">Address, APN, county and tax link</span></span>
-                </Link>
-                <button className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:bg-gray-50">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"><Landmark size={18} /></span>
-                  <span><span className="block text-sm font-medium">Add California LLC</span><span className="block text-xs text-gray-500">Auto-track $800 annual tax and LLC filing reviews</span></span>
-                </button>
-                <button className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:bg-gray-50">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"><Building2 size={18} /></span>
-                  <span><span className="block text-sm font-medium">Add other business</span><span className="block text-xs text-gray-500">Entity details and annual filings</span></span>
-                </button>
-              </div>
-            </div>
+            <form onSubmit={submit} className="mt-8 space-y-5">
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Email</span>
+                <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 outline-none focus:border-gray-900" />
+              </label>
 
-            <div className="rounded-2xl border border-gray-200 bg-gray-950 p-6 text-white shadow-sm">
-              <p className="text-sm font-medium text-gray-300">Reminder system</p>
-              <h2 className="mt-2 text-xl font-semibold">Never miss a deadline.</h2>
-              <p className="mt-2 text-sm leading-6 text-gray-300">Email reminders will be sent before each unpaid obligation. California LLCs can automatically track the $800 annual tax, Form 568 review, and any additional LLC fee review.</p>
-            </div>
+              {mode !== "forgot" && (
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Password</span>
+                  <input required minLength={6} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 outline-none focus:border-gray-900" />
+                </label>
+              )}
+
+              {mode === "login" && (
+                <button type="button" onClick={() => { setMode("forgot"); setMessage(""); }} className="text-sm font-medium text-gray-600 hover:text-gray-950">
+                  Forgot password?
+                </button>
+              )}
+
+              {message && <p className="rounded-xl bg-gray-100 px-3 py-2.5 text-sm text-gray-700">{message}</p>}
+
+              <button disabled={loading} className="w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50">
+                {loading ? "Please wait..." : mode === "login" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
+              </button>
+            </form>
+
+            {mode === "forgot" ? (
+              <button onClick={() => { setMode("login"); setMessage(""); }} className="mt-5 w-full text-sm font-medium text-gray-600 hover:text-gray-950">Back to sign in</button>
+            ) : (
+              <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMessage(""); }} className="mt-5 w-full text-sm font-medium text-gray-600 hover:text-gray-950">
+                {mode === "login" ? "Need an account? Create one" : "Already have an account? Sign in"}
+              </button>
+            )}
+
+            <p className="mt-8 text-center text-xs text-gray-400">Private dashboard · No compliance information is shown until you sign in.</p>
           </div>
         </section>
       </div>
