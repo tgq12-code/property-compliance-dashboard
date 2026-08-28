@@ -554,8 +554,8 @@ function ActionPropertyCard({ property: p, onEdit, onDelete }: { property: Prope
         <div className="p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600"><Home size={18} /></div>
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-800">You pay the tax</span>{needs && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Tax amount needs checking</span>}</div><p className="mt-1 text-sm text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p><p className="mt-1 text-xs text-slate-400">{p.county ? `${p.county} County` : "County not entered"}</p></div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Home size={18} /></div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-800">You pay the tax</span>{needs && <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">Tax amount needs checking</span>}</div><p className="mt-1 text-sm text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p><p className="mt-1 text-xs text-slate-400">{p.county ? `${p.county} County` : "County not entered"}</p></div>
             </div>
             <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
           </div>
@@ -585,11 +585,11 @@ function ActionPropertyCard({ property: p, onEdit, onDelete }: { property: Prope
           )}
         </div>
 
-        <div className="border-t border-slate-200 bg-slate-50 p-4 xl:border-l xl:border-t-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">Property tax payment</p>
-          <p className="mt-1 text-xs leading-5 text-slate-500">Use the county’s official website to check or pay the bill.</p>
-          <div className="mt-3 rounded-xl bg-white p-3 ring-1 ring-slate-200"><p className="text-[11px] text-slate-400">County tax office</p><p className="mt-0.5 text-xs font-semibold text-slate-800">{p.tax_collector_name ?? "Not entered"}</p></div>
-          {p.tax_payment_url ? <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800">Open County Tax Website <ExternalLink size={13} /></a> : <button disabled className="mt-3 w-full rounded-xl bg-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-500">Tax website not entered</button>}
+        <div className="border-t border-blue-200 bg-blue-950 p-4 text-white xl:border-l xl:border-t-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-100">Property tax payment</p>
+          <p className="mt-1 text-xs leading-5 text-blue-200">Use the county’s official website to check or pay the bill.</p>
+          <div className="mt-3 rounded-xl bg-blue-900 p-3 ring-1 ring-blue-800"><p className="text-[11px] text-blue-300">County tax office</p><p className="mt-0.5 text-xs font-semibold text-white">{p.tax_collector_name ?? "Not entered"}</p></div>
+          {p.tax_payment_url ? <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-xs font-semibold text-blue-900 transition hover:bg-blue-50">Open County Tax Website <ExternalLink size={13} /></a> : <button disabled className="mt-3 w-full rounded-xl bg-blue-900 px-3 py-2.5 text-xs font-semibold text-blue-300">Tax website not entered</button>}
         </div>
       </div>
     </article>
@@ -601,13 +601,13 @@ function ManagedPropertyCard({ property: p, onEdit, onDelete }: { property: Prop
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><ShieldCheck size={18} /></div><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">Mortgage company pays the tax</span></div><p className="mt-1 text-sm text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p></div></div>
+        <div className="flex min-w-0 gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700"><ShieldCheck size={18} /></div><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Mortgage company pays the tax</span></div><p className="mt-1 text-sm text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p></div></div>
         <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2"><InfoTile label="Estimated property value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly property tax" value={money(p.annual_property_tax)} accent="amber" /></div>
       <PropertySourceButtons property={p} />
       <MortgageInsuranceSummary property={p} />
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3"><p className="text-xs text-slate-500">Tax schedule: {schedule?.frequency ?? "Not entered"} · Next date: {getNextDue(schedule)}</p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-950">Open County Tax Website <ExternalLink size={13} /></a>}</div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-3"><p className="text-xs text-slate-500">Tax schedule: {schedule?.frequency ?? "Not entered"} · <span className="font-semibold text-red-700">Next date: {getNextDue(schedule)}</span></p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900">Open County Tax Website <ExternalLink size={13} /></a>}</div>
     </article>
   );
 }
@@ -640,9 +640,9 @@ function PropertySourceButtons({ property: p }: { property: PropertyRecord }) {
   const address = [p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ");
   return (
     <div className="mt-3 flex flex-wrap gap-2">
-      <a href={zillowLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Check Zillow <ExternalLink size={11} /></a>
-      <a href={redfinLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Check Redfin <ExternalLink size={11} /></a>
-      <a href={countyLookupUrl(address, p.state ?? "", p.county ?? "", p.tax_payment_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Check county tax <ExternalLink size={11} /></a>
+      <a href={zillowLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100">Check Zillow <ExternalLink size={11} /></a>
+      <a href={redfinLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100">Check Redfin <ExternalLink size={11} /></a>
+      <a href={countyLookupUrl(address, p.state ?? "", p.county ?? "", p.tax_payment_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100">Check county tax <ExternalLink size={11} /></a>
     </div>
   );
 }
@@ -657,7 +657,7 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
 
   return (
     <div className="mt-3 grid gap-2 sm:grid-cols-2">
-      <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+      <section className="rounded-xl border border-sky-200 bg-sky-50 p-3">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-600 ring-1 ring-sky-100"><ReceiptText size={17} /></div>
           <div className="min-w-0">
@@ -680,12 +680,12 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
         ) : <p className="mt-3 rounded-lg bg-white px-2.5 py-1.5 text-xs leading-5 text-slate-500">Not added yet. Use <span className="font-semibold">Edit details</span> to add the mortgage.</p>}
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+      <section className="rounded-xl border border-blue-300 bg-blue-100/70 p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 ring-1 ring-violet-100"><ShieldCheck size={17} /></div>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700 ring-1 ring-blue-200"><ShieldCheck size={17} /></div>
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-violet-700">Insurance · property protection</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-blue-800">Insurance · property protection</p>
               <p className="mt-1 truncate text-sm font-semibold text-slate-900">{p.insurance_carrier ?? "Insurance company not entered"}</p>
             </div>
           </div>
@@ -697,7 +697,7 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
               <FinancialValue label="Yearly insurance cost" value={preciseMoney(p.insurance_annual_premium)} />
               <FinancialValue label="Coverage ends or renews" value={formatDate(p.insurance_policy_expiration_date)} />
             </div>
-            {p.insurance_policy_start_date && <p className="mt-3 text-xs leading-5 text-violet-900/70">Coverage started {formatDate(p.insurance_policy_start_date)}</p>}
+            {p.insurance_policy_start_date && <p className="mt-3 text-xs leading-5 text-blue-900/70">Coverage started {formatDate(p.insurance_policy_start_date)}</p>}
           </>
         ) : <p className="mt-3 rounded-lg bg-white px-2.5 py-1.5 text-xs leading-5 text-slate-500">Not added yet. Use <span className="font-semibold">Edit details</span> to add the insurance.</p>}
       </section>
@@ -735,8 +735,15 @@ function SummaryStat({ label, value, sub }: { label: string; value: string; sub:
   return <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><span className="text-xs font-semibold text-slate-600">{label}</span><p className="mt-1 text-xl font-semibold tracking-tight text-slate-950">{value}</p><p className="mt-0.5 text-[11px] text-slate-500">{sub}</p></div>;
 }
 
-function InfoTile({ label, value }: { label: string; value: string; accent?: "slate" | "blue" | "indigo" | "amber" | "rose" }) {
-  return <div className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-900"><p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>;
+function InfoTile({ label, value, accent = "slate" }: { label: string; value: string; accent?: "slate" | "blue" | "indigo" | "amber" | "rose" }) {
+  const styles = {
+    slate: "border-blue-100 bg-blue-50 text-blue-950",
+    blue: "border-blue-200 bg-blue-100 text-blue-950",
+    indigo: "border-sky-200 bg-sky-50 text-sky-950",
+    amber: "border-blue-300 bg-blue-100 text-blue-950",
+    rose: "border-red-200 bg-red-50 text-red-800",
+  };
+  return <div className={`rounded-xl border p-2.5 ${styles[accent]}`}><p className="text-[10px] font-semibold uppercase tracking-[0.06em] opacity-65">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>;
 }
 
 function EmptyState({ text }: { text: string }) {
