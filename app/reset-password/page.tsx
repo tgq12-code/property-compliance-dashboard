@@ -16,6 +16,16 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     let active = true;
 
+    async function waitForSession() {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const { data, error } = await supabase.auth.getSession();
+        if (!active) return false;
+        if (!error && data.session) return true;
+        await new Promise((resolve) => window.setTimeout(resolve, 200));
+      }
+      return false;
+    }
+
     async function establishRecoverySession() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
@@ -29,10 +39,10 @@ export default function ResetPasswordPage() {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
-      const { data, error } = await supabase.auth.getSession();
+      const hasSession = await waitForSession();
       if (!active) return;
 
-      if (error || !data.session) {
+      if (!hasSession) {
         setMessage("This password reset link is invalid or has expired. Please request a new one.");
         return;
       }
@@ -41,9 +51,18 @@ export default function ResetPasswordPage() {
       setMessage("");
     }
 
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if ((event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+        setReady(true);
+        setMessage("");
+      }
+    });
+
     establishRecoverySession();
     return () => {
       active = false;
+      authListener.subscription.unsubscribe();
     };
   }, [supabase]);
 
@@ -70,8 +89,8 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    setMessage("Password updated. Redirecting to your properties...");
-    setTimeout(() => router.push("/properties"), 900);
+    setMessage("Password updated. Redirecting to your dashboard...");
+    setTimeout(() => router.push("/dashboard"), 900);
   }
 
   return (
