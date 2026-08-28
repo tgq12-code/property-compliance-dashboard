@@ -14,6 +14,7 @@ import {
   LogOut,
   Pencil,
   Plus,
+  ReceiptText,
   Search,
   ShieldCheck,
   Trash2,
@@ -43,6 +44,16 @@ type PropertyRecord = {
   market_value_source_url: string | null;
   market_value_checked_at: string | null;
   market_value_status: string | null;
+  mortgage_servicer: string | null;
+  mortgage_balance: number | null;
+  mortgage_monthly_payment: number | null;
+  mortgage_interest_rate: number | null;
+  mortgage_statement_date: string | null;
+  mortgage_payment_due_date: string | null;
+  insurance_carrier: string | null;
+  insurance_annual_premium: number | null;
+  insurance_policy_start_date: string | null;
+  insurance_policy_expiration_date: string | null;
 };
 
 type FormState = {
@@ -57,6 +68,16 @@ type FormState = {
   tax_payment_url: string;
   annual_property_tax: string;
   escrowed: boolean;
+  mortgage_servicer: string;
+  mortgage_balance: string;
+  mortgage_monthly_payment: string;
+  mortgage_interest_rate: string;
+  mortgage_statement_date: string;
+  mortgage_payment_due_date: string;
+  insurance_carrier: string;
+  insurance_annual_premium: string;
+  insurance_policy_start_date: string;
+  insurance_policy_expiration_date: string;
   notes: string;
 };
 
@@ -80,6 +101,16 @@ const blankForm: FormState = {
   tax_payment_url: "",
   annual_property_tax: "",
   escrowed: false,
+  mortgage_servicer: "",
+  mortgage_balance: "",
+  mortgage_monthly_payment: "",
+  mortgage_interest_rate: "",
+  mortgage_statement_date: "",
+  mortgage_payment_due_date: "",
+  insurance_carrier: "",
+  insurance_annual_premium: "",
+  insurance_policy_start_date: "",
+  insurance_policy_expiration_date: "",
   notes: "",
 };
 
@@ -91,6 +122,31 @@ const money = (n: number | null) =>
         currency: "USD",
         maximumFractionDigits: 0,
       }).format(n);
+
+const preciseMoney = (n: number | null) =>
+  n == null
+    ? "Not entered"
+    : new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Number(n));
+
+const formatDate = (date: string | null) =>
+  date
+    ? new Date(`${date}T12:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "Not entered";
+
+function optionalNumber(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 function officialTaxAuthority(state: string, county: string) {
   const s = state.trim().toUpperCase();
@@ -204,7 +260,7 @@ export default function PropertiesPage() {
     }
     const { data, error } = await supabase
       .from("properties")
-      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_status,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status")
+      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_status,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date")
       .order("created_at", { ascending: false });
     if (error) setMessage(error.message);
     else setProperties((data ?? []) as PropertyRecord[]);
@@ -236,6 +292,16 @@ export default function PropertiesPage() {
       tax_payment_url: p.tax_payment_url ?? "",
       annual_property_tax: p.annual_property_tax == null ? "" : String(p.annual_property_tax),
       escrowed: p.escrowed,
+      mortgage_servicer: p.mortgage_servicer ?? "",
+      mortgage_balance: p.mortgage_balance == null ? "" : String(p.mortgage_balance),
+      mortgage_monthly_payment: p.mortgage_monthly_payment == null ? "" : String(p.mortgage_monthly_payment),
+      mortgage_interest_rate: p.mortgage_interest_rate == null ? "" : String(p.mortgage_interest_rate),
+      mortgage_statement_date: p.mortgage_statement_date ?? "",
+      mortgage_payment_due_date: p.mortgage_payment_due_date ?? "",
+      insurance_carrier: p.insurance_carrier ?? "",
+      insurance_annual_premium: p.insurance_annual_premium == null ? "" : String(p.insurance_annual_premium),
+      insurance_policy_start_date: p.insurance_policy_start_date ?? "",
+      insurance_policy_expiration_date: p.insurance_policy_expiration_date ?? "",
       notes: p.notes ?? "",
     });
     setShowForm(true);
@@ -264,6 +330,16 @@ export default function PropertiesPage() {
       tax_payment_url: authority?.url ?? (form.tax_payment_url.trim() || null),
       annual_property_tax: Number.isFinite(annual) ? annual : null,
       escrowed: form.escrowed,
+      mortgage_servicer: form.mortgage_servicer.trim() || null,
+      mortgage_balance: optionalNumber(form.mortgage_balance),
+      mortgage_monthly_payment: optionalNumber(form.mortgage_monthly_payment),
+      mortgage_interest_rate: optionalNumber(form.mortgage_interest_rate),
+      mortgage_statement_date: form.mortgage_statement_date || null,
+      mortgage_payment_due_date: form.mortgage_payment_due_date || null,
+      insurance_carrier: form.insurance_carrier.trim() || null,
+      insurance_annual_premium: optionalNumber(form.insurance_annual_premium),
+      insurance_policy_start_date: form.insurance_policy_start_date || null,
+      insurance_policy_expiration_date: form.insurance_policy_expiration_date || null,
       notes: form.notes.trim() || null,
       updated_at: new Date().toISOString(),
     };
@@ -296,7 +372,7 @@ export default function PropertiesPage() {
   const filters = ["All", "You Pay", "Escrowed", "California", "Hawaii", "Florida", "Indiana"];
   const filtered = properties.filter((p) => {
     const q = search.toLowerCase();
-    const text = [p.name, p.street_address, p.city, p.state, p.county, p.zip].filter(Boolean).join(" ").toLowerCase();
+    const text = [p.name, p.street_address, p.city, p.state, p.county, p.zip, p.mortgage_servicer, p.insurance_carrier].filter(Boolean).join(" ").toLowerCase();
     if (q && !text.includes(q)) return false;
     if (filter === "You Pay") return !p.escrowed;
     if (filter === "Escrowed") return p.escrowed;
@@ -348,19 +424,54 @@ export default function PropertiesPage() {
           {showForm && (
             <section className="mt-5 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
               <div><h2 className="text-lg font-semibold">{editingId ? "Edit property" : "Add property"}</h2><p className="mt-1 text-sm text-slate-500">Sensitive fields are kept inside this edit view.</p></div>
-              <form onSubmit={save} className="mt-6 grid gap-5 md:grid-cols-2">
-                <Field label="Property name" required value={form.name} onChange={(v) => updateField("name", v)} />
-                <Field label="Street address" required value={form.street_address} onChange={(v) => updateField("street_address", v)} />
-                <Field label="City" value={form.city} onChange={(v) => updateField("city", v)} />
-                <div className="grid grid-cols-2 gap-3"><Field label="State" value={form.state} onChange={(v) => updateField("state", v)} /><Field label="ZIP" value={form.zip} onChange={(v) => updateField("zip", v)} /></div>
-                <Field label="County" value={form.county} onChange={(v) => updateField("county", v)} />
-                <Field label="APN / Parcel number" value={form.apn} onChange={(v) => updateField("apn", v)} />
-                <Field label="Tax collector" value={form.tax_collector_name} onChange={(v) => updateField("tax_collector_name", v)} />
-                <Field label="Official tax payment URL" type="url" value={form.tax_payment_url} onChange={(v) => updateField("tax_payment_url", v)} />
-                <Field label="Annual tax total" type="number" step="0.01" value={form.annual_property_tax} onChange={(v) => updateField("annual_property_tax", v)} />
-                <label className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${form.escrowed ? "border-emerald-200 bg-emerald-50" : "border-slate-200"}`}><input type="checkbox" checked={form.escrowed} onChange={(e) => updateField("escrowed", e.target.checked)} /><span><span className="block text-sm font-medium">Impounded / escrowed</span><span className="block text-xs text-slate-500">Lender pays the property taxes.</span></span></label>
-                <label className="md:col-span-2"><span className="text-sm font-medium text-slate-700">Private notes</span><textarea rows={3} value={form.notes} onChange={(e) => updateField("notes", e.target.value)} className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
-                <div className="md:col-span-2 flex justify-end gap-3"><button type="button" onClick={() => { setShowForm(false); setEditingId(null); }} className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm">Cancel</button><button disabled={saving} className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">{saving ? "Saving..." : "Save property"}</button></div>
+              <form onSubmit={save} className="mt-6 space-y-5">
+                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+                  <div className="mb-5 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-600 ring-1 ring-slate-200"><Home size={18} /></div><div><h3 className="text-sm font-semibold">Property details</h3><p className="text-xs text-slate-500">Address and basic identification</p></div></div>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <Field label="Property name" required value={form.name} onChange={(v) => updateField("name", v)} />
+                    <Field label="Street address" required value={form.street_address} onChange={(v) => updateField("street_address", v)} />
+                    <Field label="City" value={form.city} onChange={(v) => updateField("city", v)} />
+                    <div className="grid grid-cols-2 gap-3"><Field label="State" value={form.state} onChange={(v) => updateField("state", v)} /><Field label="ZIP" value={form.zip} onChange={(v) => updateField("zip", v)} /></div>
+                    <Field label="County" value={form.county} onChange={(v) => updateField("county", v)} />
+                    <Field label="APN / Parcel number" value={form.apn} onChange={(v) => updateField("apn", v)} />
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-blue-200 bg-blue-50/65 p-5">
+                  <div className="mb-5 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-blue-600 ring-1 ring-blue-100"><ReceiptText size={18} /></div><div><h3 className="text-sm font-semibold text-blue-950">Mortgage details</h3><p className="text-xs text-blue-700/75">Use the latest monthly statement</p></div></div>
+                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                    <Field label="Mortgage company / servicer" value={form.mortgage_servicer} onChange={(v) => updateField("mortgage_servicer", v)} />
+                    <Field label="Remaining principal" type="number" step="0.01" value={form.mortgage_balance} onChange={(v) => updateField("mortgage_balance", v)} />
+                    <Field label="Monthly payment" type="number" step="0.01" value={form.mortgage_monthly_payment} onChange={(v) => updateField("mortgage_monthly_payment", v)} />
+                    <Field label="Interest rate (%)" type="number" step="0.0001" value={form.mortgage_interest_rate} onChange={(v) => updateField("mortgage_interest_rate", v)} />
+                    <Field label="Statement date" type="date" value={form.mortgage_statement_date} onChange={(v) => updateField("mortgage_statement_date", v)} />
+                    <Field label="Next payment due" type="date" value={form.mortgage_payment_due_date} onChange={(v) => updateField("mortgage_payment_due_date", v)} />
+                  </div>
+                  <p className="mt-4 text-xs leading-5 text-blue-700/75">Remaining principal is a statement balance, not a mortgage payoff quote.</p>
+                </div>
+
+                <div className="rounded-3xl border border-violet-200 bg-violet-50/65 p-5">
+                  <div className="mb-5 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-violet-600 ring-1 ring-violet-100"><ShieldCheck size={18} /></div><div><h3 className="text-sm font-semibold text-violet-950">Insurance details</h3><p className="text-xs text-violet-700/75">Carrier, premium, and policy dates</p></div></div>
+                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                    <Field label="Insurance company" value={form.insurance_carrier} onChange={(v) => updateField("insurance_carrier", v)} />
+                    <Field label="Annual premium" type="number" step="0.01" value={form.insurance_annual_premium} onChange={(v) => updateField("insurance_annual_premium", v)} />
+                    <Field label="Policy starts" type="date" value={form.insurance_policy_start_date} onChange={(v) => updateField("insurance_policy_start_date", v)} />
+                    <Field label="Policy expires / renews" type="date" value={form.insurance_policy_expiration_date} onChange={(v) => updateField("insurance_policy_expiration_date", v)} />
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-amber-200 bg-amber-50/60 p-5">
+                  <div className="mb-5 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-amber-600 ring-1 ring-amber-100"><Landmark size={18} /></div><div><h3 className="text-sm font-semibold text-amber-950">Property tax details</h3><p className="text-xs text-amber-700/75">Who pays and where the payment is made</p></div></div>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <Field label="Tax collector" value={form.tax_collector_name} onChange={(v) => updateField("tax_collector_name", v)} />
+                    <Field label="Official tax payment URL" type="url" value={form.tax_payment_url} onChange={(v) => updateField("tax_payment_url", v)} />
+                    <Field label="Annual tax total" type="number" step="0.01" value={form.annual_property_tax} onChange={(v) => updateField("annual_property_tax", v)} />
+                    <label className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 ${form.escrowed ? "border-emerald-300 ring-2 ring-emerald-100" : "border-slate-200"}`}><input type="checkbox" checked={form.escrowed} onChange={(e) => updateField("escrowed", e.target.checked)} /><span><span className="block text-sm font-medium">Impounded / escrowed</span><span className="block text-xs text-slate-500">Lender pays the property taxes.</span></span></label>
+                  </div>
+                </div>
+
+                <label className="block"><span className="text-sm font-medium text-slate-700">Private notes</span><textarea rows={3} value={form.notes} onChange={(e) => updateField("notes", e.target.value)} className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
+                <div className="flex justify-end gap-3"><button type="button" onClick={() => { setShowForm(false); setEditingId(null); }} className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm">Cancel</button><button disabled={saving} className="rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">{saving ? "Saving..." : "Save property"}</button></div>
               </form>
             </section>
           )}
@@ -419,6 +530,8 @@ function ActionPropertyCard({ property: p, onEdit, onDelete }: { property: Prope
             <InfoTile label="Next due" value={nextDue} accent="blue" />
           </div>
 
+          <MortgageInsuranceSummary property={p} />
+
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
             <span><span className="font-semibold text-slate-700">Schedule:</span> {schedule?.frequency ?? "Not confirmed"}</span>
             <span><span className="font-semibold text-slate-700">Tax year:</span> {p.property_tax_year ?? schedule?.cycle ?? "Not confirmed"}</span>
@@ -454,9 +567,83 @@ function ManagedPropertyCard({ property: p, onEdit, onDelete }: { property: Prop
         <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3"><InfoTile label="Estimated value" value={p.estimated_market_value == null ? "Unavailable" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Annual tax" value={money(p.annual_property_tax)} /></div>
+      <MortgageInsuranceSummary property={p} />
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4"><p className="text-xs text-slate-500">{schedule?.frequency ?? "Schedule not confirmed"} · Next: {getNextDue(schedule)}</p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700">Open Official Tax Site <ExternalLink size={13} /></a>}</div>
     </article>
   );
+}
+
+function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord }) {
+  const hasMortgage = [p.mortgage_servicer, p.mortgage_balance, p.mortgage_monthly_payment, p.mortgage_interest_rate, p.mortgage_statement_date, p.mortgage_payment_due_date].some((value) => value != null);
+  const hasInsurance = [p.insurance_carrier, p.insurance_annual_premium, p.insurance_policy_start_date, p.insurance_policy_expiration_date].some((value) => value != null);
+  const renewal = getRenewalStatus(p.insurance_policy_expiration_date);
+  const interestRate = p.mortgage_interest_rate == null
+    ? null
+    : `${Number(p.mortgage_interest_rate).toLocaleString("en-US", { maximumFractionDigits: 4 })}% interest`;
+
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <section className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-600 ring-1 ring-sky-100"><ReceiptText size={17} /></div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-sky-700">Mortgage</p>
+            <p className="mt-1 truncate text-sm font-semibold text-slate-900">{p.mortgage_servicer ?? "Not entered"}</p>
+          </div>
+        </div>
+        {hasMortgage ? (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <FinancialValue label="Remaining principal" value={preciseMoney(p.mortgage_balance)} />
+              <FinancialValue label="Monthly payment" value={preciseMoney(p.mortgage_monthly_payment)} />
+            </div>
+            <div className="mt-3 space-y-1 text-xs leading-5 text-sky-900/70">
+              {interestRate && <p>{interestRate}</p>}
+              {p.mortgage_statement_date && <p>Balance as of {formatDate(p.mortgage_statement_date)}</p>}
+              {p.mortgage_payment_due_date && <p>Next payment due {formatDate(p.mortgage_payment_due_date)}</p>}
+            </div>
+          </>
+        ) : <p className="mt-4 text-xs leading-5 text-sky-800/70">No mortgage details entered.</p>}
+      </section>
+
+      <section className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 ring-1 ring-violet-100"><ShieldCheck size={17} /></div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-violet-700">Insurance</p>
+              <p className="mt-1 truncate text-sm font-semibold text-slate-900">{p.insurance_carrier ?? "Not entered"}</p>
+            </div>
+          </div>
+          {renewal && <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${renewal.className}`}>{renewal.label}</span>}
+        </div>
+        {hasInsurance ? (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <FinancialValue label="Annual premium" value={preciseMoney(p.insurance_annual_premium)} />
+              <FinancialValue label="Policy expires" value={formatDate(p.insurance_policy_expiration_date)} />
+            </div>
+            {p.insurance_policy_start_date && <p className="mt-3 text-xs leading-5 text-violet-900/70">Policy started {formatDate(p.insurance_policy_start_date)}</p>}
+          </>
+        ) : <p className="mt-4 text-xs leading-5 text-violet-800/70">No insurance details entered.</p>}
+      </section>
+    </div>
+  );
+}
+
+function getRenewalStatus(expirationDate: string | null) {
+  if (!expirationDate) return null;
+  const expiration = new Date(`${expirationDate}T12:00:00`);
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const days = Math.ceil((expiration.getTime() - today.getTime()) / 86_400_000);
+  if (days < 0) return { label: "Update needed", className: "bg-red-100 text-red-700" };
+  if (days <= 60) return { label: "Renews soon", className: "bg-amber-100 text-amber-800" };
+  return null;
+}
+
+function FinancialValue({ label, value }: { label: string; value: string }) {
+  return <div><p className="text-[10px] font-medium uppercase tracking-[0.07em] text-slate-400">{label}</p><p className="mt-1 text-sm font-semibold leading-5 text-slate-900">{value}</p></div>;
 }
 
 function CardActions({ property, onEdit, onDelete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void }) {
