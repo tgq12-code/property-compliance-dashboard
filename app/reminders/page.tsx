@@ -41,9 +41,18 @@ export default function RemindersPage() {
   const [recurrence, setRecurrence] = useState<Reminder["recurrence"]>("none");
   const [recipients, setRecipients] = useState("");
 
+  async function getActiveUser() {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) return data.session.user;
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    }
+    return null;
+  }
+
   async function loadReminders() {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getActiveUser();
     if (!user) {
       router.replace("/");
       return;
@@ -63,7 +72,7 @@ export default function RemindersPage() {
     event.preventDefault();
     setSaving(true);
     setMessage("");
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getActiveUser();
     if (!user) {
       router.replace("/");
       return;
@@ -105,7 +114,7 @@ export default function RemindersPage() {
 
   async function signOut() {
     await supabase.auth.signOut();
-    router.push("/");
+    router.replace("/");
   }
 
   return (
@@ -113,8 +122,11 @@ export default function RemindersPage() {
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div>
-            <p className="text-sm font-medium text-gray-500">Vo Family Operations</p>
-            <h1 className="text-2xl font-semibold text-gray-950">Family Reminders</h1>
+            <Link href="/dashboard" className="block hover:opacity-80">
+              <p className="text-sm font-medium text-gray-500">Vo Family Operations</p>
+              <h1 className="text-2xl font-semibold text-gray-950">Family Dashboard</h1>
+            </Link>
+            <p className="mt-1 text-sm text-gray-500">Family Reminders</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/properties" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Properties</Link>
