@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, Home, LogOut, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Home, LogOut, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 
 type PropertyRecord = {
@@ -58,6 +58,7 @@ export default function PropertiesPage() {
   const [properties, setProperties] = useState<PropertyRecord[]>([]);
   const [form, setForm] = useState<FormState>(blankForm);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -88,7 +89,41 @@ export default function PropertiesPage() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  async function addProperty(event: FormEvent) {
+  function openAddForm() {
+    setEditingId(null);
+    setForm(blankForm);
+    setShowForm(true);
+    setMessage("");
+  }
+
+  function startEdit(property: PropertyRecord) {
+    setEditingId(property.id);
+    setForm({
+      name: property.name,
+      street_address: property.street_address,
+      city: property.city ?? "",
+      state: property.state ?? "CA",
+      zip: property.zip ?? "",
+      county: property.county ?? "",
+      apn: property.apn ?? "",
+      tax_collector_name: property.tax_collector_name ?? "",
+      tax_payment_url: property.tax_payment_url ?? "",
+      annual_property_tax: property.annual_property_tax == null ? "" : String(property.annual_property_tax),
+      escrowed: property.escrowed,
+      notes: property.notes ?? "",
+    });
+    setShowForm(true);
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(blankForm);
+  }
+
+  async function saveProperty(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
     setMessage("");
@@ -100,8 +135,7 @@ export default function PropertiesPage() {
     }
 
     const annualTax = form.annual_property_tax.trim() ? Number(form.annual_property_tax) : null;
-    const { error } = await supabase.from("properties").insert({
-      user_id: user.id,
+    const payload = {
       name: form.name.trim(),
       street_address: form.street_address.trim(),
       city: form.city.trim() || null,
@@ -114,13 +148,19 @@ export default function PropertiesPage() {
       annual_property_tax: Number.isFinite(annualTax) ? annualTax : null,
       escrowed: form.escrowed,
       notes: form.notes.trim() || null,
-    });
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = editingId
+      ? await supabase.from("properties").update(payload).eq("id", editingId)
+      : await supabase.from("properties").insert({ user_id: user.id, ...payload });
 
     if (error) setMessage(error.message);
     else {
       setForm(blankForm);
       setShowForm(false);
-      setMessage("Property saved.");
+      setEditingId(null);
+      setMessage(editingId ? "Property updated." : "Property saved.");
       await loadProperties();
     }
     setSaving(false);
@@ -151,7 +191,7 @@ export default function PropertiesPage() {
           </div>
           <div className="flex items-center gap-3">
             <button onClick={signOut} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"><LogOut size={16} /> Sign out</button>
-            <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-2 rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"><Plus size={16} /> Add property</button>
+            <button onClick={openAddForm} className="inline-flex items-center gap-2 rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"><Plus size={16} /> Add property</button>
           </div>
         </div>
       </header>
@@ -162,10 +202,10 @@ export default function PropertiesPage() {
         {showForm && (
           <section className="mb-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-950">Add property</h2>
-              <p className="mt-1 text-sm text-gray-500">You can fill in only what you know now and add tax details later.</p>
+              <h2 className="text-lg font-semibold text-gray-950">{editingId ? "Edit property" : "Add property"}</h2>
+              <p className="mt-1 text-sm text-gray-500">{editingId ? "Update any property, tax, payment, or impound details below." : "You can fill in only what you know now and add tax details later."}</p>
             </div>
-            <form onSubmit={addProperty} className="grid gap-5 md:grid-cols-2">
+            <form onSubmit={saveProperty} className="grid gap-5 md:grid-cols-2">
               <Field label="Property name" required value={form.name} onChange={(v) => updateField("name", v)} placeholder="La Mesa Rental" />
               <Field label="Street address" required value={form.street_address} onChange={(v) => updateField("street_address", v)} placeholder="9953 Lemon Ave" />
               <Field label="City" value={form.city} onChange={(v) => updateField("city", v)} placeholder="La Mesa" />
@@ -196,8 +236,8 @@ export default function PropertiesPage() {
                 <textarea value={form.notes} onChange={(e) => updateField("notes", e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-gray-900" />
               </label>
               <div className="md:col-span-2 flex justify-end gap-3">
-                <button type="button" onClick={() => setShowForm(false)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button disabled={saving} className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50">{saving ? "Saving..." : "Save property"}</button>
+                <button type="button" onClick={cancelForm} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button disabled={saving} className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50">{saving ? "Saving..." : editingId ? "Save changes" : "Save property"}</button>
               </div>
             </form>
           </section>
@@ -240,6 +280,7 @@ export default function PropertiesPage() {
                   <div className="flex items-center gap-2 md:justify-end">
                     {!property.escrowed && property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Pay site <ExternalLink size={14} /></a>}
                     {property.escrowed && property.tax_payment_url && <a href={property.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">View tax site <ExternalLink size={14} /></a>}
+                    <button onClick={() => startEdit(property)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" aria-label={`Edit ${property.name}`}><Pencil size={14} /> Edit</button>
                     <button onClick={() => deleteProperty(property.id)} className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 hover:text-red-600" aria-label="Delete property"><Trash2 size={16} /></button>
                   </div>
                 </div>
