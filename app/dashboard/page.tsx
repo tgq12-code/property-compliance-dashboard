@@ -11,8 +11,18 @@ type Business = { id:string; name:string; entity_type:string|null; state:string|
 type Obligation = { id:string; title:string; due_date:string; status:string; amount_due:number|null; business_id:string|null; property_id:string|null };
 type Reminder = { id:string; title:string; starts_at:string; active:boolean };
 
+type UpcomingItem = {
+  id:string;
+  kind:"business"|"property"|"reminder";
+  title:string;
+  date:string;
+  amount:number|null;
+  status:string;
+};
+
 const money = (n:number|null) => n == null ? "—" : new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(n);
 const dateLabel = (iso:string) => new Date(iso.includes("T")?iso:`${iso}T12:00:00`).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+const closedStatus = (status:string) => ["completed","paid","cancelled","canceled"].includes((status||"").toLowerCase());
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -22,6 +32,7 @@ export default function DashboardPage() {
   const [businesses,setBusinesses] = useState<Business[]>([]);
   const [obligations,setObligations] = useState<Obligation[]>([]);
   const [reminders,setReminders] = useState<Reminder[]>([]);
+  const [updatingId,setUpdatingId] = useState<string|null>(null);
 
   useEffect(()=>{ let active=true; (async()=>{
     for(let i=0;i<8;i++){ const {data}=await supabase.auth.getSession(); if(!active)return; if(data.session){
@@ -37,15 +48,23 @@ export default function DashboardPage() {
   })(); return()=>{active=false}; },[router,supabase]);
 
   async function signOut(){ await supabase.auth.signOut(); router.replace("/"); }
+
+  async function markPaid(id:string){
+    setUpdatingId(id);
+    const {error}=await supabase.from("obligations").update({status:"paid",updated_at:new Date().toISOString()}).eq("id",id);
+    if(!error){ setObligations(current=>current.map(item=>item.id===id?{...item,status:"paid"}:item)); }
+    setUpdatingId(null);
+  }
+
   if(!ready) return <main className="min-h-screen bg-slate-50 p-8 text-sm text-slate-500">Loading your family command center...</main>;
 
   const directPay = properties.filter(p=>!p.escrowed).length;
   const escrowed = properties.filter(p=>p.escrowed).length;
   const today = new Date(); const soon = new Date(today); soon.setDate(soon.getDate()+45);
-  const upcomingObligations = obligations.filter(o=>{const d=new Date(`${o.due_date}T12:00:00`); return d>=today && d<=soon && o.status!=="completed";});
-  const upcoming = [
-    ...upcomingObligations.map(o=>({kind:o.business_id?"business":"property",title:o.title,date:o.due_date,amount:o.amount_due,status:"Due soon"})),
-    ...reminders.filter(r=>{const d=new Date(r.starts_at);return d>=today&&d<=soon;}).map(r=>({kind:"reminder",title:r.title,date:r.starts_at,amount:null,status:"Reminder"}))
+  const upcomingObligations = obligations.filter(o=>{const d=new Date(`${o.due_date}T12:00:00`); return d>=today && d<=soon && !closedStatus(o.status);});
+  const upcoming:UpcomingItem[] = [
+    ...upcomingObligations.map(o=>({id:o.id,kind:(o.business_id?"business":"property") as "business"|"property",title:o.title,date:o.due_date,amount:o.amount_due,status:"Due soon"})),
+    ...reminders.filter(r=>{const d=new Date(r.starts_at);return d>=today&&d<=soon;}).map(r=>({id:r.id,kind:"reminder" as const,title:r.title,date:r.starts_at,amount:null,status:"Reminder"}))
   ].sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime()).slice(0,6);
 
   const nav=[{href:"/dashboard",label:"Dashboard",icon:Home,active:true},{href:"/properties",label:"Properties & Taxes",icon:Landmark},{href:"/businesses",label:"Business Compliance",icon:Building2},{href:"/reminders",label:"Family Reminders",icon:BellRing}];
@@ -79,8 +98,8 @@ export default function DashboardPage() {
         <div className="mt-6 grid gap-6 xl:grid-cols-[1.55fr_.9fr]">
           <div className="space-y-6">
             <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5"><div><h2 className="font-semibold">Upcoming deadlines</h2><p className="mt-1 text-sm text-slate-500">Everything coming up soon, in one place.</p></div><CalendarDays className="text-blue-600" size={20}/></div>
-              <div className="divide-y divide-slate-100">{upcoming.length===0?<p className="px-6 py-8 text-sm text-slate-500">Nothing due in the next 45 days.</p>:upcoming.map((item,i)=><div key={`${item.title}-${i}`} className="flex items-center gap-4 px-6 py-4"><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${item.kind==="business"?"bg-violet-50 text-violet-600":item.kind==="reminder"?"bg-emerald-50 text-emerald-600":"bg-blue-50 text-blue-600"}`}>{item.kind==="business"?<Building2 size={18}/>:item.kind==="reminder"?<BellRing size={18}/>:<Home size={18}/>}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{item.title}</p><p className="mt-1 text-xs text-slate-500">{item.amount?money(item.amount):item.kind==="reminder"?"Family reminder":"Compliance deadline"}</p></div><div className="text-right"><p className="text-sm font-medium">{dateLabel(item.date)}</p><span className={`mt-1 inline-block rounded-full px-2.5 py-1 text-xs font-medium ${item.kind==="reminder"?"bg-blue-50 text-blue-700":"bg-amber-50 text-amber-700"}`}>{item.status}</span></div></div>)}</div>
+              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5"><div><h2 className="font-semibold">Upcoming deadlines</h2><p className="mt-1 text-sm text-slate-500">Mark an obligation paid here and future reminder emails stop automatically.</p></div><CalendarDays className="text-blue-600" size={20}/></div>
+              <div className="divide-y divide-slate-100">{upcoming.length===0?<p className="px-6 py-8 text-sm text-slate-500">Nothing due in the next 45 days.</p>:upcoming.map((item,i)=><div key={`${item.id}-${i}`} className="flex flex-wrap items-center gap-4 px-6 py-4"><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${item.kind==="business"?"bg-violet-50 text-violet-600":item.kind==="reminder"?"bg-emerald-50 text-emerald-600":"bg-blue-50 text-blue-600"}`}>{item.kind==="business"?<Building2 size={18}/>:item.kind==="reminder"?<BellRing size={18}/>:<Home size={18}/>}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{item.title}</p><p className="mt-1 text-xs text-slate-500">{item.amount?money(item.amount):item.kind==="reminder"?"Family reminder":"Compliance deadline"}</p></div><div className="text-right"><p className="text-sm font-medium">{dateLabel(item.date)}</p><span className={`mt-1 inline-block rounded-full px-2.5 py-1 text-xs font-medium ${item.kind==="reminder"?"bg-blue-50 text-blue-700":"bg-amber-50 text-amber-700"}`}>{item.status}</span></div>{item.kind!=="reminder"&&<button onClick={()=>markPaid(item.id)} disabled={updatingId===item.id} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"><CheckCircle2 size={15}/>{updatingId===item.id?"Saving...":"Mark paid"}</button>}</div>)}</div>
             </section>
 
             <section><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Properties snapshot</h2><p className="mt-1 text-sm text-slate-500">Quick view of your latest properties.</p></div><Link href="/properties" className="text-sm font-medium text-blue-600">View all properties →</Link></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{properties.slice(0,6).map(p=><Link key={p.id} href="/properties" className="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-start justify-between gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700"><Home size={20}/></div><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${p.escrowed?"bg-emerald-100 text-emerald-800":"bg-sky-100 text-sky-800"}`}>{p.escrowed?"Impounded · lender pays":"You pay"}</span></div><h3 className="mt-4 font-semibold group-hover:text-blue-700">{p.name}</h3><p className="mt-1 text-sm text-slate-500">{[p.city,p.state].filter(Boolean).join(", ")||"Location not entered"}</p><div className="mt-5 flex items-end justify-between"><div><p className="text-xs uppercase tracking-wide text-slate-400">Tax total</p><p className="mt-1 font-semibold">{money(p.annual_property_tax)}</p></div><span className="text-sm font-medium text-blue-600">Open →</span></div></Link>)}</div></section>
