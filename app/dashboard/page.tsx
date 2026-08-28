@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BellRing, Building2, CalendarDays, CheckCircle2, Clock3, Home, Landmark, LogOut, ShieldCheck, WalletCards } from "lucide-react";
+import { BellRing, Building2, CalendarDays, CheckCircle2, Clock3, Home, Landmark, LogOut, ShieldCheck, UserCheck, WalletCards } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 
 type Property = { id:string; name:string; city:string|null; state:string|null; escrowed:boolean; annual_property_tax:number|null };
@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [ready,setReady] = useState(false);
+  const [isAdmin,setIsAdmin] = useState(false);
   const [properties,setProperties] = useState<Property[]>([]);
   const [businesses,setBusinesses] = useState<Business[]>([]);
   const [obligations,setObligations] = useState<Obligation[]>([]);
@@ -36,6 +37,10 @@ export default function DashboardPage() {
 
   useEffect(()=>{ let active=true; (async()=>{
     for(let i=0;i<8;i++){ const {data}=await supabase.auth.getSession(); if(!active)return; if(data.session){
+      const userId=data.session.user.id;
+      const profile=await supabase.from("profiles").select("approved,is_admin").eq("id",userId).maybeSingle();
+      if(!profile.data?.approved){ await supabase.auth.signOut(); router.replace("/"); return; }
+      setIsAdmin(Boolean(profile.data.is_admin));
       const [p,b,o,r]=await Promise.all([
         supabase.from("properties").select("id,name,city,state,escrowed,annual_property_tax").order("created_at",{ascending:false}),
         supabase.from("businesses").select("id,name,entity_type,state").order("created_at",{ascending:false}),
@@ -67,7 +72,7 @@ export default function DashboardPage() {
     ...reminders.filter(r=>{const d=new Date(r.starts_at);return d>=today&&d<=soon;}).map(r=>({id:r.id,kind:"reminder" as const,title:r.title,date:r.starts_at,amount:null,status:"Reminder"}))
   ].sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime()).slice(0,6);
 
-  const nav=[{href:"/dashboard",label:"Dashboard",icon:Home,active:true},{href:"/properties",label:"Properties & Taxes",icon:Landmark},{href:"/businesses",label:"Business Compliance",icon:Building2},{href:"/reminders",label:"Family Reminders",icon:BellRing}];
+  const nav=[{href:"/dashboard",label:"Dashboard",icon:Home,active:true},{href:"/properties",label:"Properties & Taxes",icon:Landmark},{href:"/businesses",label:"Business Compliance",icon:Building2},{href:"/reminders",label:"Family Reminders",icon:BellRing},...(isAdmin?[{href:"/admin/accounts",label:"Account Approvals",icon:UserCheck}]:[])];
 
   return <main className="min-h-screen bg-[#f7f9fc] text-slate-950">
     <div className="mx-auto flex min-h-screen max-w-[1600px]">
@@ -84,7 +89,7 @@ export default function DashboardPage() {
       <section className="min-w-0 flex-1 px-5 py-6 md:px-8 lg:px-10">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-600">The Vo Family Command Center</p><h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight md:text-4xl"><span className="text-blue-600">Catmy</span> brings the grand ideas. <span className="text-blue-600">Tuan</span> keeps the machine running.</h1><p className="mt-3 text-sm text-slate-500">Here’s what needs attention across your family operations.</p></div>
-          <button onClick={signOut} className="lg:hidden inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><LogOut size={16}/> Sign out</button>
+          <div className="flex gap-2">{isAdmin&&<Link href="/admin/accounts" className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700"><UserCheck size={16}/> Account approvals</Link>}<button onClick={signOut} className="lg:hidden inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><LogOut size={16}/> Sign out</button></div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -107,7 +112,7 @@ export default function DashboardPage() {
 
           <aside className="space-y-6">
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Business Compliance</h2><p className="mt-1 text-sm text-slate-500">Your entities at a glance.</p></div><Building2 className="text-violet-600" size={20}/></div><div className="mt-5 space-y-3">{businesses.length===0?<p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No entities added yet.</p>:businesses.slice(0,5).map(b=><Link key={b.id} href="/businesses" className="block rounded-2xl border border-slate-100 bg-slate-50/70 p-4 hover:border-blue-200 hover:bg-blue-50/40"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">{b.name}</p><p className="mt-1 text-xs text-slate-500">{[b.entity_type,b.state].filter(Boolean).join(" · ")}</p></div><CheckCircle2 size={17} className="text-emerald-500"/></div></Link>)}</div><Link href="/businesses" className="mt-5 flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white">Manage all entities</Link></section>
-            <section className="rounded-3xl bg-gradient-to-br from-blue-600 to-blue-700 p-6 text-white shadow-sm"><p className="text-sm font-semibold text-blue-100">Quick actions</p><div className="mt-4 grid gap-3"><Link href="/properties" className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/15">Review property taxes</Link><Link href="/businesses" className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/15">Review LLC compliance</Link><Link href="/reminders" className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/15">Add a family reminder</Link></div></section>
+            <section className="rounded-3xl bg-gradient-to-br from-blue-600 to-blue-700 p-6 text-white shadow-sm"><p className="text-sm font-semibold text-blue-100">Quick actions</p><div className="mt-4 grid gap-3"><Link href="/properties" className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/15">Review property taxes</Link><Link href="/businesses" className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/15">Review LLC compliance</Link><Link href="/reminders" className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/15">Manage reminder recipients</Link>{isAdmin&&<Link href="/admin/accounts" className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/15">Approve account requests</Link>}</div></section>
           </aside>
         </div>
       </section>
