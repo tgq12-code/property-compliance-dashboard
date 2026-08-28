@@ -118,7 +118,7 @@ export async function GET(request: Request) {
 
   for (const item of obligations) {
     try {
-      const recipients = [...new Set((item.recipient_emails ?? []).map((email) => email.trim()).filter(Boolean))];
+      const recipients = Array.from(new Set((item.recipient_emails ?? []).map((email) => email.trim()).filter(Boolean)));
       if (!recipients.length) throw new Error("No compliance reminder recipients configured.");
       const context = item.property_name || item.business_name || "Compliance item";
       const amount = money(item.amount_due);
