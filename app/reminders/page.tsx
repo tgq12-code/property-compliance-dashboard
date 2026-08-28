@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarDays, LogOut, Mail, Plus, Save, Trash2, Users } from "lucide-react";
+import { CalendarDays, LogOut, Mail, Plus, Save, Trash2, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 
 type Reminder = {
@@ -27,7 +27,7 @@ const recurrenceLabels: Record<Reminder["recurrence"], string> = {
 };
 
 function parseEmails(value: string) {
-  return [...new Set(value.split(/[;,\n]/).map((email) => email.trim()).filter(Boolean))];
+  return Array.from(new Set(value.split(/[;,\n]/).map((email) => email.trim()).filter(Boolean)));
 }
 
 export default function RemindersPage() {
