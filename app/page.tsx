@@ -160,7 +160,7 @@ export default function HomePage() {
     <main className="min-h-screen bg-gray-950 px-4 py-8 sm:px-6 lg:py-12">
       <div className="mx-auto grid min-h-[calc(100vh-6rem)] max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl lg:grid-cols-[1.2fr_0.8fr]">
         <section className="relative min-h-[430px] overflow-hidden bg-gray-900 lg:min-h-full">
-          <img src="/welcome-cartoon-clean.jpg" alt="Catmy and Tuan cartoon" className="absolute inset-0 h-full w-full object-cover object-center" />
+          <img src="/welcome-cartoon-clean.png" alt="Catmy and Tuan cartoon" className="absolute inset-0 h-full w-full object-cover object-center" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/10" />
 
           <div className="absolute left-[11%] top-[18%] rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold tracking-wide text-gray-950 shadow-lg">CATMY: GRAND IDEAS DEPARTMENT</div>
