@@ -36,7 +36,9 @@ type PropertyRecord = {
   tax_payment_url: string | null;
   annual_property_tax: number | null;
   property_tax_year: string | null;
+  property_tax_source: string | null;
   property_tax_status: string | null;
+  tax_lookup_checked_at: string | null;
   escrowed: boolean;
   notes: string | null;
   estimated_market_value: number | null;
@@ -67,6 +69,9 @@ type FormState = {
   tax_collector_name: string;
   tax_payment_url: string;
   annual_property_tax: string;
+  estimated_market_value: string;
+  property_tax_year: string;
+  value_source: string;
   escrowed: boolean;
   mortgage_servicer: string;
   mortgage_balance: string;
@@ -100,6 +105,9 @@ const blankForm: FormState = {
   tax_collector_name: "",
   tax_payment_url: "",
   annual_property_tax: "",
+  estimated_market_value: "",
+  property_tax_year: "",
+  value_source: "Zillow",
   escrowed: false,
   mortgage_servicer: "",
   mortgage_balance: "",
@@ -229,6 +237,22 @@ function getNextDue(schedule: TaxSchedule | null) {
   return next?.label ?? dated.at(-1)?.label ?? schedule.dueDates[0] ?? "Not entered";
 }
 
+function zillowLookupUrl(address: string) {
+  const slug = address.trim().replace(/[\s,]+/g, "-");
+  return `https://www.zillow.com/homes/${encodeURIComponent(slug)}_rb/`;
+}
+
+function redfinLookupUrl(address: string) {
+  return `https://www.google.com/search?q=${encodeURIComponent(`site:redfin.com ${address}`)}`;
+}
+
+function countyLookupUrl(address: string, state: string, county: string, taxUrl?: string | null) {
+  if (taxUrl) return taxUrl;
+  const authority = officialTaxAuthority(state, county);
+  if (authority?.url) return authority.url;
+  return `https://www.google.com/search?q=${encodeURIComponent(`${county} County ${state} official property tax lookup ${address}`)}`;
+}
+
 export default function PropertiesPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -260,7 +284,7 @@ export default function PropertiesPage() {
     }
     const { data, error } = await supabase
       .from("properties")
-      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_status,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date")
+      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date")
       .order("created_at", { ascending: false });
     if (error) setMessage(error.message);
     else setProperties((data ?? []) as PropertyRecord[]);
@@ -291,6 +315,9 @@ export default function PropertiesPage() {
       tax_collector_name: p.tax_collector_name ?? "",
       tax_payment_url: p.tax_payment_url ?? "",
       annual_property_tax: p.annual_property_tax == null ? "" : String(p.annual_property_tax),
+      estimated_market_value: p.estimated_market_value == null ? "" : String(p.estimated_market_value),
+      property_tax_year: p.property_tax_year ?? "",
+      value_source: p.market_value_source?.toLowerCase().includes("redfin") ? "Redfin" : p.market_value_source?.toLowerCase().includes("other") ? "Other" : "Zillow",
       escrowed: p.escrowed,
       mortgage_servicer: p.mortgage_servicer ?? "",
       mortgage_balance: p.mortgage_balance == null ? "" : String(p.mortgage_balance),
@@ -317,6 +344,10 @@ export default function PropertiesPage() {
       return;
     }
     const annual = form.annual_property_tax.trim() ? Number(form.annual_property_tax) : null;
+    const estimated = form.estimated_market_value.trim() ? Number(form.estimated_market_value) : null;
+    const address = [form.street_address, form.city, form.state, form.zip].filter(Boolean).join(", ");
+    const valueSourceUrl = form.value_source === "Redfin" ? redfinLookupUrl(address) : form.value_source === "Zillow" ? zillowLookupUrl(address) : null;
+    const checkedAt = new Date().toISOString();
     const authority = officialTaxAuthority(form.state, form.county);
     const payload = {
       name: form.name.trim(),
@@ -329,6 +360,15 @@ export default function PropertiesPage() {
       tax_collector_name: authority?.name ?? (form.tax_collector_name.trim() || null),
       tax_payment_url: authority?.url ?? (form.tax_payment_url.trim() || null),
       annual_property_tax: Number.isFinite(annual) ? annual : null,
+      property_tax_year: form.property_tax_year.trim() || null,
+      property_tax_source: Number.isFinite(annual) ? "County records (manually entered)" : null,
+      property_tax_status: Number.isFinite(annual) ? "confirmed" : "needs_confirmation",
+      tax_lookup_checked_at: Number.isFinite(annual) ? checkedAt : null,
+      estimated_market_value: Number.isFinite(estimated) ? estimated : null,
+      market_value_source: Number.isFinite(estimated) ? `${form.value_source} (manually entered)` : null,
+      market_value_source_url: Number.isFinite(estimated) ? valueSourceUrl : null,
+      market_value_checked_at: Number.isFinite(estimated) ? checkedAt : null,
+      market_value_status: Number.isFinite(estimated) ? "estimate" : null,
       escrowed: form.escrowed,
       mortgage_servicer: form.mortgage_servicer.trim() || null,
       mortgage_balance: optionalNumber(form.mortgage_balance),
@@ -437,6 +477,7 @@ export default function PropertiesPage() {
                     <Field label="County" value={form.county} onChange={(v) => updateField("county", v)} />
                     <Field label="APN / Parcel number" value={form.apn} onChange={(v) => updateField("apn", v)} />
                   </div>
+                  <PropertyResearchLinks address={[form.street_address, form.city, form.state, form.zip].filter(Boolean).join(", ")} state={form.state} county={form.county} taxUrl={form.tax_payment_url} />
                 </div>
 
                 <div className="rounded-3xl border border-blue-200 bg-blue-50/65 p-5">
@@ -465,9 +506,12 @@ export default function PropertiesPage() {
                 <div className="rounded-3xl border border-amber-200 bg-amber-50/60 p-5">
                   <div className="mb-5 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-amber-600 ring-1 ring-amber-100"><Landmark size={18} /></div><div><h3 className="text-sm font-semibold text-amber-950">Property taxes</h3><p className="text-xs text-amber-700/75">Who pays the county and where to make a payment</p></div></div>
                   <div className="grid gap-5 md:grid-cols-2">
+                    <Field label="Estimated property value" type="number" step="1" value={form.estimated_market_value} onChange={(v) => updateField("estimated_market_value", v)} />
+                    <SelectField label="Value copied from" value={form.value_source} options={["Zillow", "Redfin", "Other"]} onChange={(v) => updateField("value_source", v)} />
                     <Field label="County tax office" value={form.tax_collector_name} onChange={(v) => updateField("tax_collector_name", v)} />
                     <Field label="Tax payment website" type="url" value={form.tax_payment_url} onChange={(v) => updateField("tax_payment_url", v)} />
                     <Field label="Yearly property tax" type="number" step="0.01" value={form.annual_property_tax} onChange={(v) => updateField("annual_property_tax", v)} />
+                    <Field label="Property tax year" value={form.property_tax_year} onChange={(v) => updateField("property_tax_year", v)} />
                     <label className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 ${form.escrowed ? "border-emerald-300 ring-2 ring-emerald-100" : "border-slate-200"}`}><input type="checkbox" checked={form.escrowed} onChange={(e) => updateField("escrowed", e.target.checked)} /><span><span className="block text-sm font-medium">Mortgage company pays the property tax</span><span className="block text-xs text-slate-500">This is also called escrow. Leave unchecked if you pay the county yourself.</span></span></label>
                   </div>
                 </div>
@@ -532,6 +576,8 @@ function ActionPropertyCard({ property: p, onEdit, onDelete }: { property: Prope
             <InfoTile label="Next tax payment due" value={nextDue} accent="rose" />
           </div>
 
+          <PropertySourceButtons property={p} />
+
           <MortgageInsuranceSummary property={p} />
 
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
@@ -570,9 +616,45 @@ function ManagedPropertyCard({ property: p, onEdit, onDelete }: { property: Prop
         <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3"><InfoTile label="Estimated property value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly property tax" value={money(p.annual_property_tax)} accent="amber" /></div>
+      <PropertySourceButtons property={p} />
       <MortgageInsuranceSummary property={p} />
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-100 pt-4"><p className="text-xs text-slate-500">Tax schedule: {schedule?.frequency ?? "Not entered"} · Next date: {getNextDue(schedule)}</p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800">Open County Tax Website <ExternalLink size={13} /></a>}</div>
     </article>
+  );
+}
+
+function PropertyResearchLinks({ address, state, county, taxUrl }: { address: string; state: string; county: string; taxUrl?: string | null }) {
+  const ready = address.trim().length >= 8;
+  const links = [
+    { label: "Check Zillow value", href: zillowLookupUrl(address), style: "border-blue-200 bg-white text-blue-700 hover:bg-blue-50" },
+    { label: "Check Redfin value", href: redfinLookupUrl(address), style: "border-red-200 bg-white text-red-700 hover:bg-red-50" },
+    { label: "Check county tax", href: countyLookupUrl(address, state, county, taxUrl), style: "border-amber-200 bg-white text-amber-800 hover:bg-amber-50" },
+  ];
+
+  return (
+    <div className="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+      <p className="text-sm font-semibold text-indigo-950">Look it up, then enter the numbers below</p>
+      <p className="mt-1 text-xs leading-5 text-indigo-700">These buttons search the address for you. Copy the estimated value and yearly tax into the editable fields.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {links.map((link) => ready ? (
+          <a key={link.label} href={link.href} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold ${link.style}`}>{link.label} <ExternalLink size={13} /></a>
+        ) : (
+          <span key={link.label} className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400">{link.label}</span>
+        ))}
+      </div>
+      {!ready && <p className="mt-2 text-xs text-slate-500">Enter the address first to activate these buttons.</p>}
+    </div>
+  );
+}
+
+function PropertySourceButtons({ property: p }: { property: PropertyRecord }) {
+  const address = [p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ");
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      <a href={zillowLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100">Check Zillow <ExternalLink size={11} /></a>
+      <a href={redfinLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] font-semibold text-red-700 hover:bg-red-100">Check Redfin <ExternalLink size={11} /></a>
+      <a href={countyLookupUrl(address, p.state ?? "", p.county ?? "", p.tax_payment_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-100">Check county tax <ExternalLink size={11} /></a>
+    </div>
   );
 }
 
@@ -729,4 +811,8 @@ function Sidebar({ active, signOut }: { active: string; signOut: () => void }) {
 
 function Field({ label, value, onChange, type = "text", step, required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; step?: string; required?: boolean }) {
   return <label><span className="text-sm font-medium text-slate-700">{label}</span><input type={type} step={step} required={required} value={value} onChange={(e) => onChange(e.target.value)} className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>;
+}
+
+function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return <label><span className="text-sm font-medium text-slate-700">{label}</span><select value={value} onChange={(e) => onChange(e.target.value)} className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
 }
