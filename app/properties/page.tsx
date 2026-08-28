@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, Home, LogOut, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { ExternalLink, Home, LogOut, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 
 type PropertyRecord = {
@@ -63,11 +63,20 @@ export default function PropertiesPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
+  async function getActiveUser() {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.user) return sessionData.session.user;
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    }
+    return null;
+  }
+
   async function loadProperties() {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getActiveUser();
     if (!user) {
-      router.replace("/login");
+      router.replace("/");
       return;
     }
 
@@ -128,9 +137,9 @@ export default function PropertiesPage() {
     setSaving(true);
     setMessage("");
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getActiveUser();
     if (!user) {
-      router.replace("/login");
+      router.replace("/");
       return;
     }
 
@@ -175,19 +184,19 @@ export default function PropertiesPage() {
 
   async function signOut() {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/");
   }
 
   return (
     <main className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-50" aria-label="Back to family dashboard"><ArrowLeft size={17} /></Link>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Property & Business</p>
-              <h1 className="text-2xl font-semibold text-gray-950">Properties</h1>
-            </div>
+          <div>
+            <Link href="/dashboard" className="block hover:opacity-80">
+              <p className="text-sm font-medium text-gray-500">Vo Family Operations</p>
+              <h1 className="text-2xl font-semibold text-gray-950">Family Dashboard</h1>
+            </Link>
+            <p className="mt-1 text-sm text-gray-500">Properties & Taxes</p>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={signOut} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"><LogOut size={16} /> Sign out</button>
