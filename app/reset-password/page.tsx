@@ -1,19 +1,60 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState("Verifying your reset link...");
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function establishRecoverySession() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          if (active) setMessage("This password reset link is invalid or has expired. Please request a new one.");
+          return;
+        }
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      const { data, error } = await supabase.auth.getSession();
+      if (!active) return;
+
+      if (error || !data.session) {
+        setMessage("This password reset link is invalid or has expired. Please request a new one.");
+        return;
+      }
+
+      setReady(true);
+      setMessage("");
+    }
+
+    establishRecoverySession();
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setMessage("");
+
+    if (!ready) {
+      setMessage("Your password reset session is not ready. Please request a new reset link.");
+      return;
+    }
 
     if (password !== confirmPassword) {
       setMessage("Passwords do not match.");
@@ -21,7 +62,6 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
@@ -44,16 +84,16 @@ export default function ResetPasswordPage() {
         <form onSubmit={submit} className="mt-8 space-y-5">
           <label className="block">
             <span className="text-sm font-medium text-gray-700">New password</span>
-            <input required minLength={6} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-gray-900" />
+            <input required minLength={6} disabled={!ready || loading} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-gray-900 disabled:bg-gray-100" />
           </label>
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Confirm new password</span>
-            <input required minLength={6} type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-gray-900" />
+            <input required minLength={6} disabled={!ready || loading} type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-gray-900 disabled:bg-gray-100" />
           </label>
 
           {message && <p className="rounded-xl bg-gray-100 px-3 py-2 text-sm text-gray-700">{message}</p>}
 
-          <button disabled={loading} className="w-full rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50">
+          <button disabled={!ready || loading} className="w-full rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50">
             {loading ? "Updating..." : "Update password"}
           </button>
         </form>
