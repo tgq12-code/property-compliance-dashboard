@@ -7,7 +7,6 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   ExternalLink,
   Home,
   Landmark,
@@ -574,15 +573,13 @@ function ActionPropertyCard({ property: p, onEdit, onDelete, onToggleComplete }:
             <InfoTile label="Next tax payment due" value={nextDue} accent="rose" />
           </div>
 
-          <details className="group mt-2.5 rounded-lg border border-slate-200 bg-slate-50/60">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-semibold text-slate-700"><span>Mortgage, insurance and more details</span><ChevronDown size={14} className="transition group-open:rotate-180" /></summary>
-            <div className="border-t border-slate-200 p-2.5">
+          <section className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Mortgage and insurance</p>
               <MortgageInsuranceSummary property={p} compact />
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500"><span>Plan: {schedule?.frequency ?? "Not entered"}</span><span>Tax year: {p.property_tax_year ?? schedule?.cycle ?? "Not entered"}</span>{p.market_value_source && <span>Value: {p.market_value_source}{checkedDate ? ` · ${checkedDate}` : ""}</span>}</div>
               <PropertySourceButtons property={p} />
               {schedule && <div className="mt-2 border-t border-slate-200 pt-2"><div className="flex flex-wrap gap-1.5">{schedule.dueDates.map((date) => <span key={date} className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">{date}</span>)}</div><p className="mt-1.5 text-[11px] leading-4 text-slate-500">{schedule.note}</p></div>}
-            </div>
-          </details>
+          </section>
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-2.5">
           <p className="min-w-0 truncate text-[11px] text-slate-500">{p.tax_collector_name ?? (p.county ? `${p.county} County` : "County tax office not entered")}</p>
           {p.tax_payment_url ? <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-2 text-[11px] font-semibold text-white hover:bg-blue-800">Pay Property Tax <ExternalLink size={11} /></a> : <span className="text-[11px] text-slate-400">Tax website not entered</span>}
@@ -603,7 +600,7 @@ function ManagedPropertyCard({ property: p, onEdit, onDelete, onToggleComplete }
         <CardActions property={p} onEdit={onEdit} onDelete={onDelete} onToggleComplete={onToggleComplete} />
       </div>
       <div className="mt-2.5 grid grid-cols-2 gap-1.5"><InfoTile label="Estimated value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly tax" value={money(p.annual_property_tax)} accent="amber" /></div>
-      <details className="group mt-2 rounded-lg border border-slate-200 bg-slate-50/60"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-semibold text-slate-700"><span>Mortgage, insurance and details</span><ChevronDown size={14} className="transition group-open:rotate-180" /></summary><div className="border-t border-slate-200 p-2.5"><MortgageInsuranceSummary property={p} compact /><PropertySourceButtons property={p} /></div></details>
+      <section className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5"><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Mortgage and insurance</p><MortgageInsuranceSummary property={p} compact /><PropertySourceButtons property={p} /></section>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-2"><p className="text-[11px] text-slate-500">{schedule?.frequency ?? "Tax schedule not entered"} · <span className="font-semibold text-red-700">Next: {getNextDue(schedule)}</span></p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700">County Tax <ExternalLink size={11} /></a>}</div>
       </div>
     </article>
