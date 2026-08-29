@@ -31,7 +31,9 @@ create table if not exists public.properties (
   insurance_annual_premium numeric(12,2),
   insurance_policy_start_date date,
   insurance_policy_expiration_date date,
+  completed_at timestamptz,
   notes text,
+  completed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -62,6 +64,7 @@ create table if not exists public.obligations (
   frequency text,
   official_payment_url text,
   status text not null default 'upcoming',
+  completed_at timestamptz,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -85,7 +88,7 @@ create table if not exists public.reminder_preferences (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references auth.users(id) on delete cascade,
   email_enabled boolean not null default true,
-  reminder_days integer[] not null default array[60,30,14,7,2,0],
+  reminder_days integer[] not null default array[30,7,1],
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
