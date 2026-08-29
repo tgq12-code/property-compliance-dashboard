@@ -447,21 +447,17 @@ export default function PropertiesPage() {
               <SummaryStat label="Total property value" value={money(portfolioValue || null)} sub="Estimated value of all properties" tone="violet" />
               <SummaryStat label="Yearly property taxes" value={money(annualTaxes || null)} sub="Total recorded for all properties" tone="amber" />
             </div>
+            <p className="mt-3 text-xs text-slate-400">Market values are estimates, not appraisals.</p>
           </header>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 shadow-sm">
-            <div className="flex items-center gap-2"><LockKeyhole size={15} className="text-blue-600" /><span><span className="font-semibold text-slate-700">Private workspace.</span> Parcel numbers and private notes stay out of overview cards.</span></div>
-            <span>Market values are estimates, not appraisals.</span>
-          </div>
 
           {message && <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">{message}</div>}
 
           {showForm && (
             <section className="mt-5 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
               <div><h2 className="text-lg font-semibold">{editingId ? "Edit property details" : "Add a property"}</h2><p className="mt-1 text-sm text-slate-500">Add what you know. Any field can be updated later.</p></div>
-              <form onSubmit={save} className="mt-6 space-y-5">
-                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
-                  <div className="mb-5 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-600 ring-1 ring-slate-200"><Home size={18} /></div><div><h3 className="text-sm font-semibold">Property details</h3><p className="text-xs text-slate-500">Name and address</p></div></div>
+              <form onSubmit={save} className="mt-5 space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+                  <div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 ring-1 ring-slate-200"><Home size={18} /></div><div><h3 className="text-sm font-semibold">Property details</h3><p className="text-xs text-slate-500">Name and address</p></div></div>
                   <div className="grid gap-5 md:grid-cols-2">
                     <Field label="Property name" required value={form.name} onChange={(v) => updateField("name", v)} />
                     <Field label="Street address" required value={form.street_address} onChange={(v) => updateField("street_address", v)} />
@@ -473,8 +469,8 @@ export default function PropertiesPage() {
                   <PropertyResearchLinks address={[form.street_address, form.city, form.state, form.zip].filter(Boolean).join(", ")} state={form.state} county={form.county} taxUrl={form.tax_payment_url} />
                 </div>
 
-                <div className="rounded-3xl border border-blue-200 bg-blue-50/65 p-5">
-                  <div className="mb-5 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-blue-600 ring-1 ring-blue-100"><ReceiptText size={18} /></div><div><h3 className="text-sm font-semibold text-blue-950">Mortgage</h3><p className="text-xs text-blue-700/75">Who holds the loan, what is owed, and the monthly payment</p></div></div>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/45 p-4 sm:p-5">
+                  <div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-600 ring-1 ring-blue-100"><ReceiptText size={18} /></div><div><h3 className="text-sm font-semibold text-blue-950">Mortgage</h3><p className="text-xs text-blue-700/75">Who holds the loan, what is owed, and the monthly payment</p></div></div>
                   <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                     <Field label="Mortgage company" value={form.mortgage_servicer} onChange={(v) => updateField("mortgage_servicer", v)} />
                     <Field label="Amount still owed" type="number" step="0.01" value={form.mortgage_balance} onChange={(v) => updateField("mortgage_balance", v)} />
@@ -486,8 +482,8 @@ export default function PropertiesPage() {
                   <p className="mt-4 text-xs leading-5 text-blue-700/75">“Amount still owed” comes from the latest statement. The final payoff amount may be slightly different.</p>
                 </div>
 
-                <div className="rounded-3xl border border-violet-200 bg-violet-50/65 p-5">
-                  <div className="mb-5 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-violet-600 ring-1 ring-violet-100"><ShieldCheck size={18} /></div><div><h3 className="text-sm font-semibold text-violet-950">Insurance</h3><p className="text-xs text-violet-700/75">Who protects the property and what the coverage costs</p></div></div>
+                <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 sm:p-5">
+                  <div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-700 ring-1 ring-blue-200"><ShieldCheck size={18} /></div><div><h3 className="text-sm font-semibold text-blue-950">Insurance</h3><p className="text-xs text-blue-700/75">Who protects the property and what the coverage costs</p></div></div>
                   <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                     <Field label="Insurance company" value={form.insurance_carrier} onChange={(v) => updateField("insurance_carrier", v)} />
                     <Field label="Yearly insurance cost" type="number" step="0.01" value={form.insurance_annual_premium} onChange={(v) => updateField("insurance_annual_premium", v)} />
@@ -496,8 +492,8 @@ export default function PropertiesPage() {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-amber-200 bg-amber-50/60 p-5">
-                  <div className="mb-5 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-amber-600 ring-1 ring-amber-100"><Landmark size={18} /></div><div><h3 className="text-sm font-semibold text-amber-950">Property taxes</h3><p className="text-xs text-amber-700/75">Who pays the county and where to make a payment</p></div></div>
+                <div className="rounded-2xl border border-blue-300 bg-blue-100/55 p-4 sm:p-5">
+                  <div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-800 ring-1 ring-blue-200"><Landmark size={18} /></div><div><h3 className="text-sm font-semibold text-blue-950">Property taxes</h3><p className="text-xs text-blue-800/75">Who pays the county and where to make a payment</p></div></div>
                   <div className="grid gap-5 md:grid-cols-2">
                     <Field label="Estimated property value" type="number" step="1" value={form.estimated_market_value} onChange={(v) => updateField("estimated_market_value", v)} />
                     <SelectField label="Value copied from" value={form.value_source} options={["Zillow", "Redfin", "Other"]} onChange={(v) => updateField("value_source", v)} />
@@ -505,7 +501,7 @@ export default function PropertiesPage() {
                     <Field label="Tax payment website" type="url" value={form.tax_payment_url} onChange={(v) => updateField("tax_payment_url", v)} />
                     <Field label="Yearly property tax" type="number" step="0.01" value={form.annual_property_tax} onChange={(v) => updateField("annual_property_tax", v)} />
                     <Field label="Property tax year" value={form.property_tax_year} onChange={(v) => updateField("property_tax_year", v)} />
-                    <label className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 ${form.escrowed ? "border-emerald-300 ring-2 ring-emerald-100" : "border-slate-200"}`}><input type="checkbox" checked={form.escrowed} onChange={(e) => updateField("escrowed", e.target.checked)} /><span><span className="block text-sm font-medium">Mortgage company pays the property tax</span><span className="block text-xs text-slate-500">This is also called escrow. Leave unchecked if you pay the county yourself.</span></span></label>
+                    <label className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 ${form.escrowed ? "border-blue-400 ring-2 ring-blue-100" : "border-slate-200"}`}><input type="checkbox" checked={form.escrowed} onChange={(e) => updateField("escrowed", e.target.checked)} /><span><span className="block text-sm font-medium">Mortgage company pays the property tax</span><span className="block text-xs text-slate-500">This is also called escrow. Leave unchecked if you pay the county yourself.</span></span></label>
                   </div>
                 </div>
 
@@ -520,17 +516,17 @@ export default function PropertiesPage() {
           </div>
 
           {loading ? <p className="mt-8 text-sm text-slate-500">Loading properties...</p> : (
-            <div className="mt-5 space-y-7">
+            <div className="mt-5 space-y-8">
               {filter !== "Lender Pays" && (
                 <section>
-                  <SectionHeading title="You Pay the Property Tax" count={directPay.length} subtitle="You are responsible for paying the county directly." tone="blue" />
+                  <SectionHeading title="You Pay the Property Tax" count={directPay.length} subtitle="You are responsible for paying the county directly." />
                   {directPay.length === 0 ? <EmptyState text="No direct-pay properties in this view." /> : <div className="mt-3 space-y-3">{directPay.map((p) => <ActionPropertyCard key={p.id} property={p} onEdit={edit} onDelete={remove} />)}</div>}
                 </section>
               )}
 
               {filter !== "You Pay" && (
                 <section>
-                  <SectionHeading title="Lender Pays the Property Tax" count={escrowed.length} subtitle="Your mortgage company handles the tax payment through escrow." tone="green" />
+                  <SectionHeading title="Lender Pays the Property Tax" count={escrowed.length} subtitle="Your mortgage company handles the tax payment through escrow." />
                   {escrowed.length === 0 ? <EmptyState text="No escrowed properties in this view." /> : <div className="mt-3 grid gap-3 xl:grid-cols-2">{escrowed.map((p) => <ManagedPropertyCard key={p.id} property={p} onEdit={edit} onDelete={remove} />)}</div>}
                 </section>
               )}
@@ -549,9 +545,9 @@ function ActionPropertyCard({ property: p, onEdit, onDelete }: { property: Prope
   const checkedDate = p.market_value_checked_at ? new Date(p.market_value_checked_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
-      <div className="grid gap-0 xl:grid-cols-[1.35fr_.85fr]">
-        <div className="p-4">
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-blue-200 hover:shadow-md">
+      <div className="h-1 bg-gradient-to-r from-blue-700 via-blue-500 to-sky-300" />
+      <div className="p-4 sm:p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 gap-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Home size={18} /></div>
@@ -560,22 +556,22 @@ function ActionPropertyCard({ property: p, onEdit, onDelete }: { property: Prope
             <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
           </div>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
             <InfoTile label="Estimated property value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" />
             <InfoTile label="Yearly property tax" value={money(p.annual_property_tax)} accent="amber" />
             <InfoTile label="Next tax payment due" value={nextDue} accent="rose" />
           </div>
 
-          <PropertySourceButtons property={p} />
-
           <MortgageInsuranceSummary property={p} />
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500">
             <span><span className="font-semibold text-slate-700">Payment plan:</span> {schedule?.frequency ?? "Not entered"}</span>
             <span><span className="font-semibold text-slate-700">Tax year:</span> {p.property_tax_year ?? schedule?.cycle ?? "Not entered"}</span>
             {p.market_value_source && <span><span className="font-semibold text-slate-700">Value source:</span> {p.market_value_source}{checkedDate ? ` · ${checkedDate}` : ""}</span>}
             {p.market_value_source_url && <a href={p.market_value_source_url} target="_blank" rel="noreferrer" className="font-semibold text-indigo-600 hover:text-indigo-700">View value source ↗</a>}
           </div>
+
+          <PropertySourceButtons property={p} />
 
           {schedule && (
             <details className="group mt-3 rounded-xl border border-slate-200 bg-slate-50/70">
@@ -583,13 +579,9 @@ function ActionPropertyCard({ property: p, onEdit, onDelete }: { property: Prope
               <div className="border-t border-slate-200 px-3 py-3"><div className="flex flex-wrap gap-2">{schedule.dueDates.map((date) => <span key={date} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800">{date}</span>)}</div>{schedule.installmentAmount && <p className="mt-2 text-xs font-semibold text-slate-600">Approx. {schedule.installmentAmount} per installment</p>}<p className="mt-2 text-xs leading-5 text-slate-500">{schedule.note}</p></div>
             </details>
           )}
-        </div>
-
-        <div className="border-t border-blue-200 bg-blue-950 p-4 text-white xl:border-l xl:border-t-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-100">Property tax payment</p>
-          <p className="mt-1 text-xs leading-5 text-blue-200">Use the county’s official website to check or pay the bill.</p>
-          <div className="mt-3 rounded-xl bg-blue-900 p-3 ring-1 ring-blue-800"><p className="text-[11px] text-blue-300">County tax office</p><p className="mt-0.5 text-xs font-semibold text-white">{p.tax_collector_name ?? "Not entered"}</p></div>
-          {p.tax_payment_url ? <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-xs font-semibold text-blue-900 transition hover:bg-blue-50">Open County Tax Website <ExternalLink size={13} /></a> : <button disabled className="mt-3 w-full rounded-xl bg-blue-900 px-3 py-2.5 text-xs font-semibold text-blue-300">Tax website not entered</button>}
+        <div className="flex flex-col gap-3 border-t border-blue-100 bg-blue-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="min-w-0"><p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-700">Pay property tax</p><p className="mt-0.5 truncate text-xs text-slate-600">{p.tax_collector_name ?? "County tax office not entered"}</p></div>
+          {p.tax_payment_url ? <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-800">Open County Tax Website <ExternalLink size={13} /></a> : <button disabled className="shrink-0 rounded-xl bg-blue-100 px-4 py-2.5 text-xs font-semibold text-blue-400">Tax website not entered</button>}
         </div>
       </div>
     </article>
@@ -599,15 +591,18 @@ function ActionPropertyCard({ property: p, onEdit, onDelete }: { property: Prope
 function ManagedPropertyCard({ property: p, onEdit, onDelete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void }) {
   const schedule = getTaxSchedule(p);
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-blue-200 hover:shadow-md">
+      <div className="h-1 bg-gradient-to-r from-blue-600 to-sky-300" />
+      <div className="p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700"><ShieldCheck size={18} /></div><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Mortgage company pays the tax</span></div><p className="mt-1 text-sm text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p></div></div>
         <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2"><InfoTile label="Estimated property value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly property tax" value={money(p.annual_property_tax)} accent="amber" /></div>
-      <PropertySourceButtons property={p} />
       <MortgageInsuranceSummary property={p} />
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-3"><p className="text-xs text-slate-500">Tax schedule: {schedule?.frequency ?? "Not entered"} · <span className="font-semibold text-red-700">Next date: {getNextDue(schedule)}</span></p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900">Open County Tax Website <ExternalLink size={13} /></a>}</div>
+      <PropertySourceButtons property={p} />
+      </div>
     </article>
   );
 }
@@ -639,10 +634,11 @@ function PropertyResearchLinks({ address, state, county, taxUrl }: { address: st
 function PropertySourceButtons({ property: p }: { property: PropertyRecord }) {
   const address = [p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ");
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
-      <a href={zillowLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100">Check Zillow <ExternalLink size={11} /></a>
-      <a href={redfinLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100">Check Redfin <ExternalLink size={11} /></a>
-      <a href={countyLookupUrl(address, p.state ?? "", p.county ?? "", p.tax_payment_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100">Check county tax <ExternalLink size={11} /></a>
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
+      <span className="font-semibold text-slate-400">Research:</span>
+      <a href={zillowLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800">Zillow <ExternalLink size={10} /></a>
+      <a href={redfinLookupUrl(address)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800">Redfin <ExternalLink size={10} /></a>
+      <a href={countyLookupUrl(address, p.state ?? "", p.county ?? "", p.tax_payment_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800">County tax <ExternalLink size={10} /></a>
     </div>
   );
 }
@@ -657,11 +653,11 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
 
   return (
     <div className="mt-3 grid gap-2 sm:grid-cols-2">
-      <section className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+      <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-[inset_3px_0_0_#bae6fd]">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-600 ring-1 ring-sky-100"><ReceiptText size={17} /></div>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-sky-700">Mortgage · money borrowed</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-blue-600">Mortgage</p>
             <p className="mt-1 truncate text-sm font-semibold text-slate-900">{p.mortgage_servicer ?? "Mortgage company not entered"}</p>
           </div>
         </div>
@@ -671,7 +667,7 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
               <FinancialValue label="Amount still owed" value={preciseMoney(p.mortgage_balance)} />
               <FinancialValue label="Monthly mortgage payment" value={preciseMoney(p.mortgage_monthly_payment)} />
             </div>
-            <div className="mt-3 space-y-1 text-xs leading-5 text-sky-900/70">
+            <div className="mt-3 space-y-1 text-xs leading-5 text-slate-500">
               {interestRate && <p>{interestRate}</p>}
               {p.mortgage_statement_date && <p>Balance checked on {formatDate(p.mortgage_statement_date)}</p>}
               {p.mortgage_payment_due_date && <p>Next mortgage payment: {formatDate(p.mortgage_payment_due_date)}</p>}
@@ -680,12 +676,12 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
         ) : <p className="mt-3 rounded-lg bg-white px-2.5 py-1.5 text-xs leading-5 text-slate-500">Not added yet. Use <span className="font-semibold">Edit details</span> to add the mortgage.</p>}
       </section>
 
-      <section className="rounded-xl border border-blue-300 bg-blue-100/70 p-3">
+      <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-[inset_3px_0_0_#60a5fa]">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700 ring-1 ring-blue-200"><ShieldCheck size={17} /></div>
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-blue-800">Insurance · property protection</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-blue-700">Insurance</p>
               <p className="mt-1 truncate text-sm font-semibold text-slate-900">{p.insurance_carrier ?? "Insurance company not entered"}</p>
             </div>
           </div>
@@ -697,7 +693,7 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
               <FinancialValue label="Yearly insurance cost" value={preciseMoney(p.insurance_annual_premium)} />
               <FinancialValue label="Coverage ends or renews" value={formatDate(p.insurance_policy_expiration_date)} />
             </div>
-            {p.insurance_policy_start_date && <p className="mt-3 text-xs leading-5 text-blue-900/70">Coverage started {formatDate(p.insurance_policy_start_date)}</p>}
+            {p.insurance_policy_start_date && <p className="mt-3 text-xs leading-5 text-slate-500">Coverage started {formatDate(p.insurance_policy_start_date)}</p>}
           </>
         ) : <p className="mt-3 rounded-lg bg-white px-2.5 py-1.5 text-xs leading-5 text-slate-500">Not added yet. Use <span className="font-semibold">Edit details</span> to add the insurance.</p>}
       </section>
@@ -724,11 +720,8 @@ function CardActions({ property, onEdit, onDelete }: { property: PropertyRecord;
   return <div className="flex shrink-0 gap-1"><button onClick={() => onEdit(property)} className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"><Pencil size={14} /> Edit details</button><button onClick={() => onDelete(property.id)} aria-label="Delete property" className="rounded-xl border border-slate-200 p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button></div>;
 }
 
-function SectionHeading({ title, count, subtitle, tone }: { title: string; count: number; subtitle: string; tone: "blue" | "green" }) {
-  const shell = tone === "blue" ? "border-sky-200 bg-sky-50" : "border-emerald-200 bg-emerald-50";
-  const icon = tone === "blue" ? "bg-sky-600 text-white" : "bg-emerald-600 text-white";
-  const pill = tone === "blue" ? "bg-white text-sky-700 ring-sky-200" : "bg-white text-emerald-700 ring-emerald-200";
-  return <div className={`rounded-2xl border px-4 py-3 ${shell}`}><div className="flex items-center gap-3"><span className={`flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold ${icon}`}>{count}</span><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold">{title}</h2><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${pill}`}>{tone === "blue" ? "ACTION" : "HANDLED FOR YOU"}</span></div><p className="mt-0.5 text-xs text-slate-600 sm:text-sm">{subtitle}</p></div></div></div>;
+function SectionHeading({ title, count, subtitle }: { title: string; count: number; subtitle: string }) {
+  return <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-3"><div><h2 className="text-lg font-semibold text-slate-900">{title}</h2><p className="mt-0.5 text-xs text-slate-500 sm:text-sm">{subtitle}</p></div><span className="flex h-8 min-w-8 items-center justify-center rounded-full bg-blue-100 px-2 text-sm font-bold text-blue-700">{count}</span></div>;
 }
 
 function SummaryStat({ label, value, sub }: { label: string; value: string; sub: string; tone: "blue" | "green" | "violet" | "amber" }) {
@@ -737,10 +730,10 @@ function SummaryStat({ label, value, sub }: { label: string; value: string; sub:
 
 function InfoTile({ label, value, accent = "slate" }: { label: string; value: string; accent?: "slate" | "blue" | "indigo" | "amber" | "rose" }) {
   const styles = {
-    slate: "border-blue-100 bg-blue-50 text-blue-950",
-    blue: "border-blue-200 bg-blue-100 text-blue-950",
-    indigo: "border-sky-200 bg-sky-50 text-sky-950",
-    amber: "border-blue-300 bg-blue-100 text-blue-950",
+    slate: "border-slate-200 bg-slate-50 text-slate-900",
+    blue: "border-blue-100 bg-blue-50/70 text-blue-950",
+    indigo: "border-blue-100 bg-blue-50/50 text-slate-900",
+    amber: "border-blue-200 bg-blue-100/60 text-blue-950",
     rose: "border-red-200 bg-red-50 text-red-800",
   };
   return <div className={`rounded-xl border p-2.5 ${styles[accent]}`}><p className="text-[10px] font-semibold uppercase tracking-[0.06em] opacity-65">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>;
