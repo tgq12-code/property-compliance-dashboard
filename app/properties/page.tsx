@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Building2,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   ExternalLink,
   Home,
@@ -55,6 +56,7 @@ type PropertyRecord = {
   insurance_annual_premium: number | null;
   insurance_policy_start_date: string | null;
   insurance_policy_expiration_date: string | null;
+  completed_at: string | null;
 };
 
 type FormState = {
@@ -282,7 +284,7 @@ export default function PropertiesPage() {
     }
     const { data, error } = await supabase
       .from("properties")
-      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date")
+      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date,completed_at")
       .order("created_at", { ascending: false });
     if (error) setMessage(error.message);
     else setProperties((data ?? []) as PropertyRecord[]);
@@ -400,6 +402,16 @@ export default function PropertiesPage() {
     const { error } = await supabase.from("properties").delete().eq("id", id);
     if (error) setMessage(error.message);
     else await load();
+  }
+
+  async function toggleComplete(property: PropertyRecord) {
+    const completedAt = property.completed_at ? null : new Date().toISOString();
+    const { error } = await supabase.from("properties").update({ completed_at: completedAt, updated_at: new Date().toISOString() }).eq("id", property.id);
+    if (error) setMessage(error.message);
+    else {
+      setMessage(completedAt ? `${property.name} marked complete.` : `${property.name} reopened.`);
+      await load();
+    }
   }
 
   async function signOut() {
@@ -520,14 +532,14 @@ export default function PropertiesPage() {
               {filter !== "Lender Pays" && (
                 <section>
                   <SectionHeading title="You Pay the Property Tax" count={directPay.length} subtitle="You are responsible for paying the county directly." />
-                  {directPay.length === 0 ? <EmptyState text="No direct-pay properties in this view." /> : <div className="mt-3 space-y-3">{directPay.map((p) => <ActionPropertyCard key={p.id} property={p} onEdit={edit} onDelete={remove} />)}</div>}
+                  {directPay.length === 0 ? <EmptyState text="No direct-pay properties in this view." /> : <div className="mt-3 space-y-2">{directPay.map((p) => <ActionPropertyCard key={p.id} property={p} onEdit={edit} onDelete={remove} onToggleComplete={toggleComplete} />)}</div>}
                 </section>
               )}
 
               {filter !== "You Pay" && (
                 <section>
                   <SectionHeading title="Lender Pays the Property Tax" count={escrowed.length} subtitle="Your mortgage company handles the tax payment through escrow." />
-                  {escrowed.length === 0 ? <EmptyState text="No escrowed properties in this view." /> : <div className="mt-3 grid gap-3 xl:grid-cols-2">{escrowed.map((p) => <ManagedPropertyCard key={p.id} property={p} onEdit={edit} onDelete={remove} />)}</div>}
+                  {escrowed.length === 0 ? <EmptyState text="No escrowed properties in this view." /> : <div className="mt-3 grid gap-2 xl:grid-cols-2">{escrowed.map((p) => <ManagedPropertyCard key={p.id} property={p} onEdit={edit} onDelete={remove} onToggleComplete={toggleComplete} />)}</div>}
                 </section>
               )}
             </div>
@@ -538,70 +550,61 @@ export default function PropertiesPage() {
   );
 }
 
-function ActionPropertyCard({ property: p, onEdit, onDelete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void }) {
+function ActionPropertyCard({ property: p, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
   const schedule = getTaxSchedule(p);
   const needs = p.property_tax_status === "needs_confirmation";
   const nextDue = getNextDue(schedule);
   const checkedDate = p.market_value_checked_at ? new Date(p.market_value_checked_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-blue-200 hover:shadow-md">
-      <div className="h-1 bg-gradient-to-r from-blue-700 via-blue-500 to-sky-300" />
-      <div className="p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Home size={18} /></div>
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-800">You pay the tax</span>{needs && <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">Tax amount needs checking</span>}</div><p className="mt-1 text-sm text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p><p className="mt-1 text-xs text-slate-400">{p.county ? `${p.county} County` : "County not entered"}</p></div>
+    <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:border-blue-200 ${p.completed_at ? "border-emerald-200 opacity-80" : "border-slate-200"}`}>
+      <div className="h-0.5 bg-gradient-to-r from-blue-700 via-blue-500 to-sky-300" />
+      <div className="p-3 sm:p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Home size={17} /></div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">You Pay</span>{needs && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Check tax</span>}</div><p className="mt-0.5 text-xs text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p>{p.completed_at && <CompletionStamp value={p.completed_at} />}</div>
             </div>
-            <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
+            <CardActions property={p} onEdit={onEdit} onDelete={onDelete} onToggleComplete={onToggleComplete} />
           </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <div className="mt-3 grid gap-1.5 sm:grid-cols-3">
             <InfoTile label="Estimated property value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" />
             <InfoTile label="Yearly property tax" value={money(p.annual_property_tax)} accent="amber" />
             <InfoTile label="Next tax payment due" value={nextDue} accent="rose" />
           </div>
 
-          <MortgageInsuranceSummary property={p} />
-
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500">
-            <span><span className="font-semibold text-slate-700">Payment plan:</span> {schedule?.frequency ?? "Not entered"}</span>
-            <span><span className="font-semibold text-slate-700">Tax year:</span> {p.property_tax_year ?? schedule?.cycle ?? "Not entered"}</span>
-            {p.market_value_source && <span><span className="font-semibold text-slate-700">Value source:</span> {p.market_value_source}{checkedDate ? ` · ${checkedDate}` : ""}</span>}
-            {p.market_value_source_url && <a href={p.market_value_source_url} target="_blank" rel="noreferrer" className="font-semibold text-indigo-600 hover:text-indigo-700">View value source ↗</a>}
-          </div>
-
-          <PropertySourceButtons property={p} />
-
-          {schedule && (
-            <details className="group mt-3 rounded-xl border border-slate-200 bg-slate-50/70">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-semibold text-slate-700"><span>Show all property tax dates</span><ChevronDown size={15} className="transition group-open:rotate-180" /></summary>
-              <div className="border-t border-slate-200 px-3 py-3"><div className="flex flex-wrap gap-2">{schedule.dueDates.map((date) => <span key={date} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800">{date}</span>)}</div>{schedule.installmentAmount && <p className="mt-2 text-xs font-semibold text-slate-600">Approx. {schedule.installmentAmount} per installment</p>}<p className="mt-2 text-xs leading-5 text-slate-500">{schedule.note}</p></div>
-            </details>
-          )}
-        <div className="flex flex-col gap-3 border-t border-blue-100 bg-blue-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="min-w-0"><p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-700">Pay property tax</p><p className="mt-0.5 truncate text-xs text-slate-600">{p.tax_collector_name ?? "County tax office not entered"}</p></div>
-          {p.tax_payment_url ? <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-800">Open County Tax Website <ExternalLink size={13} /></a> : <button disabled className="shrink-0 rounded-xl bg-blue-100 px-4 py-2.5 text-xs font-semibold text-blue-400">Tax website not entered</button>}
+          <details className="group mt-2.5 rounded-lg border border-slate-200 bg-slate-50/60">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-semibold text-slate-700"><span>Mortgage, insurance and more details</span><ChevronDown size={14} className="transition group-open:rotate-180" /></summary>
+            <div className="border-t border-slate-200 p-2.5">
+              <MortgageInsuranceSummary property={p} compact />
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500"><span>Plan: {schedule?.frequency ?? "Not entered"}</span><span>Tax year: {p.property_tax_year ?? schedule?.cycle ?? "Not entered"}</span>{p.market_value_source && <span>Value: {p.market_value_source}{checkedDate ? ` · ${checkedDate}` : ""}</span>}</div>
+              <PropertySourceButtons property={p} />
+              {schedule && <div className="mt-2 border-t border-slate-200 pt-2"><div className="flex flex-wrap gap-1.5">{schedule.dueDates.map((date) => <span key={date} className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">{date}</span>)}</div><p className="mt-1.5 text-[11px] leading-4 text-slate-500">{schedule.note}</p></div>}
+            </div>
+          </details>
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-2.5">
+          <p className="min-w-0 truncate text-[11px] text-slate-500">{p.tax_collector_name ?? (p.county ? `${p.county} County` : "County tax office not entered")}</p>
+          {p.tax_payment_url ? <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-2 text-[11px] font-semibold text-white hover:bg-blue-800">Pay Property Tax <ExternalLink size={11} /></a> : <span className="text-[11px] text-slate-400">Tax website not entered</span>}
         </div>
       </div>
     </article>
   );
 }
 
-function ManagedPropertyCard({ property: p, onEdit, onDelete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void }) {
+function ManagedPropertyCard({ property: p, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
   const schedule = getTaxSchedule(p);
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-blue-200 hover:shadow-md">
-      <div className="h-1 bg-gradient-to-r from-blue-600 to-sky-300" />
-      <div className="p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700"><ShieldCheck size={18} /></div><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Mortgage company pays the tax</span></div><p className="mt-1 text-sm text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p></div></div>
-        <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
+    <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${p.completed_at ? "border-emerald-200 opacity-80" : "border-slate-200"}`}>
+      <div className="h-0.5 bg-gradient-to-r from-blue-600 to-sky-300" />
+      <div className="p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 gap-2.5"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ShieldCheck size={17} /></div><div><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Lender Pays</span></div><p className="mt-0.5 text-xs text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p>{p.completed_at && <CompletionStamp value={p.completed_at} />}</div></div>
+        <CardActions property={p} onEdit={onEdit} onDelete={onDelete} onToggleComplete={onToggleComplete} />
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2"><InfoTile label="Estimated property value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly property tax" value={money(p.annual_property_tax)} accent="amber" /></div>
-      <MortgageInsuranceSummary property={p} />
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-3"><p className="text-xs text-slate-500">Tax schedule: {schedule?.frequency ?? "Not entered"} · <span className="font-semibold text-red-700">Next date: {getNextDue(schedule)}</span></p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900">Open County Tax Website <ExternalLink size={13} /></a>}</div>
-      <PropertySourceButtons property={p} />
+      <div className="mt-2.5 grid grid-cols-2 gap-1.5"><InfoTile label="Estimated value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly tax" value={money(p.annual_property_tax)} accent="amber" /></div>
+      <details className="group mt-2 rounded-lg border border-slate-200 bg-slate-50/60"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-semibold text-slate-700"><span>Mortgage, insurance and details</span><ChevronDown size={14} className="transition group-open:rotate-180" /></summary><div className="border-t border-slate-200 p-2.5"><MortgageInsuranceSummary property={p} compact /><PropertySourceButtons property={p} /></div></details>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-2"><p className="text-[11px] text-slate-500">{schedule?.frequency ?? "Tax schedule not entered"} · <span className="font-semibold text-red-700">Next: {getNextDue(schedule)}</span></p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700">County Tax <ExternalLink size={11} /></a>}</div>
       </div>
     </article>
   );
@@ -643,7 +646,7 @@ function PropertySourceButtons({ property: p }: { property: PropertyRecord }) {
   );
 }
 
-function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord }) {
+function MortgageInsuranceSummary({ property: p, compact = false }: { property: PropertyRecord; compact?: boolean }) {
   const hasMortgage = [p.mortgage_servicer, p.mortgage_balance, p.mortgage_monthly_payment, p.mortgage_interest_rate, p.mortgage_statement_date, p.mortgage_payment_due_date].some((value) => value != null);
   const hasInsurance = [p.insurance_carrier, p.insurance_annual_premium, p.insurance_policy_start_date, p.insurance_policy_expiration_date].some((value) => value != null);
   const renewal = getRenewalStatus(p.insurance_policy_expiration_date);
@@ -652,10 +655,10 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
     : `${Number(p.mortgage_interest_rate).toLocaleString("en-US", { maximumFractionDigits: 4 })}% interest`;
 
   return (
-    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-      <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-[inset_3px_0_0_#bae6fd]">
+    <div className={`${compact ? "mt-0" : "mt-3"} grid gap-1.5 sm:grid-cols-2`}>
+      <section className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-[inset_3px_0_0_#bae6fd]">
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-600 ring-1 ring-sky-100"><ReceiptText size={17} /></div>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-sky-600"><ReceiptText size={15} /></div>
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-blue-600">Mortgage</p>
             <p className="mt-1 truncate text-sm font-semibold text-slate-900">{p.mortgage_servicer ?? "Mortgage company not entered"}</p>
@@ -663,23 +666,23 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
         </div>
         {hasMortgage ? (
           <>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2">
               <FinancialValue label="Amount still owed" value={preciseMoney(p.mortgage_balance)} />
               <FinancialValue label="Monthly mortgage payment" value={preciseMoney(p.mortgage_monthly_payment)} />
             </div>
-            <div className="mt-3 space-y-1 text-xs leading-5 text-slate-500">
+            <div className="mt-2 space-y-0.5 text-[11px] leading-4 text-slate-500">
               {interestRate && <p>{interestRate}</p>}
               {p.mortgage_statement_date && <p>Balance checked on {formatDate(p.mortgage_statement_date)}</p>}
               {p.mortgage_payment_due_date && <p>Next mortgage payment: {formatDate(p.mortgage_payment_due_date)}</p>}
             </div>
           </>
-        ) : <p className="mt-3 rounded-lg bg-white px-2.5 py-1.5 text-xs leading-5 text-slate-500">Not added yet. Use <span className="font-semibold">Edit details</span> to add the mortgage.</p>}
+        ) : <p className="mt-2 text-[11px] text-slate-500">Not added yet.</p>}
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-[inset_3px_0_0_#60a5fa]">
+      <section className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-[inset_3px_0_0_#60a5fa]">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700 ring-1 ring-blue-200"><ShieldCheck size={17} /></div>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700"><ShieldCheck size={15} /></div>
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-blue-700">Insurance</p>
               <p className="mt-1 truncate text-sm font-semibold text-slate-900">{p.insurance_carrier ?? "Insurance company not entered"}</p>
@@ -689,13 +692,13 @@ function MortgageInsuranceSummary({ property: p }: { property: PropertyRecord })
         </div>
         {hasInsurance ? (
           <>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2">
               <FinancialValue label="Yearly insurance cost" value={preciseMoney(p.insurance_annual_premium)} />
               <FinancialValue label="Coverage ends or renews" value={formatDate(p.insurance_policy_expiration_date)} />
             </div>
-            {p.insurance_policy_start_date && <p className="mt-3 text-xs leading-5 text-slate-500">Coverage started {formatDate(p.insurance_policy_start_date)}</p>}
+            {p.insurance_policy_start_date && <p className="mt-2 text-[11px] leading-4 text-slate-500">Coverage started {formatDate(p.insurance_policy_start_date)}</p>}
           </>
-        ) : <p className="mt-3 rounded-lg bg-white px-2.5 py-1.5 text-xs leading-5 text-slate-500">Not added yet. Use <span className="font-semibold">Edit details</span> to add the insurance.</p>}
+        ) : <p className="mt-2 text-[11px] text-slate-500">Not added yet.</p>}
       </section>
     </div>
   );
@@ -713,11 +716,15 @@ function getRenewalStatus(expirationDate: string | null) {
 }
 
 function FinancialValue({ label, value }: { label: string; value: string }) {
-  return <div><p className="text-[10px] font-medium uppercase tracking-[0.07em] text-slate-400">{label}</p><p className="mt-1 text-sm font-semibold leading-5 text-slate-900">{value}</p></div>;
+  return <div><p className="text-[9px] font-medium uppercase tracking-[0.06em] text-slate-400">{label}</p><p className="mt-0.5 text-xs font-semibold leading-4 text-slate-900">{value}</p></div>;
 }
 
-function CardActions({ property, onEdit, onDelete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void }) {
-  return <div className="flex shrink-0 gap-1"><button onClick={() => onEdit(property)} className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"><Pencil size={14} /> Edit details</button><button onClick={() => onDelete(property.id)} aria-label="Delete property" className="rounded-xl border border-slate-200 p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button></div>;
+function CardActions({ property, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
+  return <div className="flex shrink-0 flex-wrap justify-end gap-1"><button onClick={() => onToggleComplete(property)} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold ${property.completed_at ? "border border-slate-200 bg-white text-slate-600" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}><CheckCircle2 size={13} /> {property.completed_at ? "Reopen" : "Mark Complete"}</button><button onClick={() => onEdit(property)} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700"><Pencil size={13} /> Edit</button><button onClick={() => onDelete(property.id)} aria-label="Delete property" className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button></div>;
+}
+
+function CompletionStamp({ value }: { value: string }) {
+  return <p className="mt-1 text-[11px] font-medium text-emerald-700">Completed {new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</p>;
 }
 
 function SectionHeading({ title, count, subtitle }: { title: string; count: number; subtitle: string }) {
@@ -736,7 +743,7 @@ function InfoTile({ label, value, accent = "slate" }: { label: string; value: st
     amber: "border-blue-200 bg-blue-100/60 text-blue-950",
     rose: "border-red-200 bg-red-50 text-red-800",
   };
-  return <div className={`rounded-xl border p-2.5 ${styles[accent]}`}><p className="text-[10px] font-semibold uppercase tracking-[0.06em] opacity-65">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>;
+  return <div className={`rounded-lg border px-2.5 py-2 ${styles[accent]}`}><p className="text-[9px] font-semibold uppercase tracking-[0.05em] opacity-65">{label}</p><p className="mt-0.5 text-xs font-semibold sm:text-sm">{value}</p></div>;
 }
 
 function EmptyState({ text }: { text: string }) {
