@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/reminders",
-      "schedule": "55 19 * * *"
+      "schedule": "0 16 * * *"
     },
     {
       "path": "/api/cron/database-health",
