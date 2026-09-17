@@ -64,9 +64,11 @@ function dueLabel(day: number) {
 }
 
 export async function GET(request: Request) {
+  const startedAt = Date.now();
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    console.error(JSON.stringify({ level: "error", event: "reminder_cron_unauthorized", cronSecretConfigured: Boolean(cronSecret) }));
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
@@ -75,6 +77,16 @@ export async function GET(request: Request) {
   const smtpUser = process.env.REMINDER_SMTP_USER;
   const smtpPassword = process.env.REMINDER_SMTP_APP_PASSWORD;
   if (!supabaseUrl || !supabaseKey || !smtpUser || !smtpPassword) {
+    console.error(JSON.stringify({
+      level: "error",
+      event: "reminder_cron_missing_config",
+      missing: [
+        !supabaseUrl && "NEXT_PUBLIC_SUPABASE_URL",
+        !supabaseKey && "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        !smtpUser && "REMINDER_SMTP_USER",
+        !smtpPassword && "REMINDER_SMTP_APP_PASSWORD",
+      ].filter(Boolean),
+    }));
     return NextResponse.json({ ok: false, error: "Reminder email environment variables are incomplete." }, { status: 500 });
   }
 
@@ -84,8 +96,14 @@ export async function GET(request: Request) {
     supabase.rpc("claim_due_obligation_reminders", { p_secret: cronSecret, p_limit: 100 }),
   ]);
 
-  if (familyClaim.error) return NextResponse.json({ ok: false, error: familyClaim.error.message }, { status: 500 });
-  if (obligationClaim.error) return NextResponse.json({ ok: false, error: obligationClaim.error.message }, { status: 500 });
+  if (familyClaim.error) {
+    console.error(JSON.stringify({ level: "error", event: "family_reminder_claim_failed", error: familyClaim.error.message }));
+    return NextResponse.json({ ok: false, error: familyClaim.error.message }, { status: 500 });
+  }
+  if (obligationClaim.error) {
+    console.error(JSON.stringify({ level: "error", event: "obligation_reminder_claim_failed", error: obligationClaim.error.message }));
+    return NextResponse.json({ ok: false, error: obligationClaim.error.message }, { status: 500 });
+  }
 
   const reminders = (familyClaim.data ?? []) as ClaimedReminder[];
   const obligations = (obligationClaim.data ?? []) as ClaimedObligationReminder[];
@@ -112,6 +130,7 @@ export async function GET(request: Request) {
     } catch (sendError) {
       familyFailed += 1;
       const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
+      console.error(JSON.stringify({ level: "error", event: "family_reminder_send_failed", reminderId: reminder.id, error: errorMessage }));
       await supabase.rpc("fail_family_reminder_send", { p_secret: cronSecret, p_id: reminder.id, p_error: errorMessage });
     }
   }
@@ -135,9 +154,12 @@ export async function GET(request: Request) {
     } catch (sendError) {
       obligationFailed += 1;
       const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
+      console.error(JSON.stringify({ level: "error", event: "obligation_reminder_send_failed", obligationId: item.obligation_id, error: errorMessage }));
       await supabase.rpc("fail_obligation_reminder_send", { p_secret: cronSecret, p_log_id: item.log_id, p_error: errorMessage });
     }
   }
 
-  return NextResponse.json({ ok: true, family: { processed: reminders.length, sent: familySent, failed: familyFailed }, compliance: { processed: obligations.length, sent: obligationSent, failed: obligationFailed } });
+  const result = { ok: true, family: { processed: reminders.length, sent: familySent, failed: familyFailed }, compliance: { processed: obligations.length, sent: obligationSent, failed: obligationFailed } };
+  console.log(JSON.stringify({ level: "info", event: "reminder_cron_completed", ...result, durationMs: Date.now() - startedAt }));
+  return NextResponse.json(result);
 }
