@@ -15,6 +15,7 @@ export async function POST(request: Request) {
 
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
   });
   const { data: { user }, error: userError } = await supabase.auth.getUser(token);
   if (userError || !user?.email) {
