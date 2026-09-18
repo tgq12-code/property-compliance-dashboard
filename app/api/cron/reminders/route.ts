@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import nodemailer from "nodemailer";
 import { addDays, addMonths, addWeeks, addYears } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
+import { sendReminderEmail } from "@/lib/resend-email";
 
 type ClaimedReminder = {
   id: string;
@@ -74,17 +74,15 @@ export async function GET(request: Request) {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  const smtpUser = process.env.REMINDER_SMTP_USER;
-  const smtpPassword = process.env.REMINDER_SMTP_APP_PASSWORD;
-  if (!supabaseUrl || !supabaseKey || !smtpUser || !smtpPassword) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!supabaseUrl || !supabaseKey || !resendApiKey) {
     console.error(JSON.stringify({
       level: "error",
       event: "reminder_cron_missing_config",
       missing: [
         !supabaseUrl && "NEXT_PUBLIC_SUPABASE_URL",
         !supabaseKey && "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-        !smtpUser && "REMINDER_SMTP_USER",
-        !smtpPassword && "REMINDER_SMTP_APP_PASSWORD",
+        !resendApiKey && "RESEND_API_KEY",
       ].filter(Boolean),
     }));
     return NextResponse.json({ ok: false, error: "Reminder email environment variables are incomplete." }, { status: 500 });
@@ -107,8 +105,6 @@ export async function GET(request: Request) {
 
   const reminders = (familyClaim.data ?? []) as ClaimedReminder[];
   const obligations = (obligationClaim.data ?? []) as ClaimedObligationReminder[];
-  const transporter = nodemailer.createTransport({ host: "smtp.gmail.com", port: 587, secure: false, auth: { user: smtpUser, pass: smtpPassword } });
-
   let familySent = 0;
   let familyFailed = 0;
   let obligationSent = 0;
@@ -122,7 +118,7 @@ export async function GET(request: Request) {
       const when = new Intl.DateTimeFormat("en-US", { dateStyle: "full", timeStyle: "short", timeZone: reminder.timezone || "America/Los_Angeles" }).format(new Date(reminder.next_send_at));
       const plainText = ["VO FAMILY REMINDER", "", reminder.title, "", message, "", `Scheduled for: ${when}`, reminder.recurrence === "none" ? "One-time reminder" : `Repeats: ${reminder.recurrence}`, "", "Sent by the Vo Family Reminder system."].join("\n");
       const html = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827;line-height:1.6"><div style="font-size:12px;letter-spacing:.16em;color:#6b7280;font-weight:700">VO FAMILY REMINDER</div><h1 style="font-size:24px;margin:10px 0 18px">${escapeHtml(reminder.title)}</h1><div style="font-size:16px;white-space:pre-wrap">${escapeHtml(message)}</div><div style="margin-top:24px;padding:16px;border-radius:12px;background:#f3f4f6"><div><strong>Scheduled for:</strong> ${escapeHtml(when)}</div><div><strong>Repeat:</strong> ${escapeHtml(reminder.recurrence === "none" ? "One time" : reminder.recurrence)}</div></div><p style="margin-top:24px;font-size:12px;color:#9ca3af">Sent by the Vo Family Reminder system.</p></div>`;
-      await transporter.sendMail({ from: `Vo Family Reminders <${smtpUser}>`, to: recipients, subject: reminder.subject, text: plainText, html });
+      await sendReminderEmail({ to: recipients, subject: reminder.subject, text: plainText, html });
       const nextSendAt = nextOccurrence(reminder);
       const { error } = await supabase.rpc("complete_family_reminder_send", { p_secret: cronSecret, p_id: reminder.id, p_sent_at: new Date().toISOString(), p_next_send_at: nextSendAt, p_keep_active: Boolean(nextSendAt) });
       if (error) throw error;
@@ -147,7 +143,7 @@ export async function GET(request: Request) {
       const plainText = ["VO FAMILY COMPLIANCE REMINDER", "", status, item.title, context, "", `Due date: ${due}`, amount ? `Amount: ${amount}` : null, item.official_payment_url ? `Official link: ${item.official_payment_url}` : null, "", "Please review this item before the due date.", "", "Sent automatically by the Vo Family Reminder system."].filter(Boolean).join("\n");
       const actionButton = item.official_payment_url ? `<p style="margin-top:22px"><a href="${escapeHtml(item.official_payment_url)}" style="display:inline-block;background:#2563eb;color:white;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700">Open official site</a></p>` : "";
       const html = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827;line-height:1.6"><div style="font-size:12px;letter-spacing:.14em;color:#2563eb;font-weight:700">VO FAMILY COMPLIANCE REMINDER</div><h1 style="font-size:24px;margin:10px 0 6px">${escapeHtml(item.title)}</h1><p style="margin:0 0 20px;color:#6b7280">${escapeHtml(context)}</p><div style="padding:18px;border-radius:14px;background:#eff6ff"><div style="font-weight:700;font-size:18px">${escapeHtml(status)}</div><div style="margin-top:8px"><strong>Due:</strong> ${escapeHtml(due)}</div>${amount ? `<div><strong>Amount:</strong> ${escapeHtml(amount)}</div>` : ""}</div>${actionButton}<p style="margin-top:24px;font-size:12px;color:#9ca3af">Automatic reminders are scheduled 30, 7, and 1 day before the due date. Marking an obligation paid or completed stops future reminders. Escrowed property-tax items are excluded.</p></div>`;
-      await transporter.sendMail({ from: `Vo Family Reminders <${smtpUser}>`, to: recipients, subject, text: plainText, html });
+      await sendReminderEmail({ to: recipients, subject, text: plainText, html });
       const { error } = await supabase.rpc("complete_obligation_reminder_send", { p_secret: cronSecret, p_log_id: item.log_id, p_sent_at: new Date().toISOString() });
       if (error) throw error;
       obligationSent += 1;
