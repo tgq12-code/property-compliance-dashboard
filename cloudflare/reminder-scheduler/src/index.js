@@ -1,4 +1,18 @@
 export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (url.pathname !== "/health") {
+      return new Response("Not found", { status: 404 });
+    }
+
+    return Response.json({
+      ok: true,
+      cronSecretConfigured: Boolean(env.CRON_SECRET),
+      reminderEndpointConfigured: Boolean(env.REMINDER_ENDPOINT),
+    });
+  },
+
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(runReminderCheck(env));
   },
