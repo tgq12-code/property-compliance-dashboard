@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vo-family-reminder-scheduler",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-21",
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "REMINDER_ENDPOINT": "https://property-compliance-dashboard.vercel.app/api/cron/reminders"
+  }
+}
