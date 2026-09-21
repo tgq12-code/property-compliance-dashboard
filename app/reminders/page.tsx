@@ -37,6 +37,7 @@ export default function RemindersPage(){
   const [saving,setSaving]=useState(false);
   const [savingSettings,setSavingSettings]=useState(false);
   const [testingEmail,setTestingEmail]=useState(false);
+  const [savingScheduler,setSavingScheduler]=useState(false);
   const [message,setMessage]=useState("");
   const [showForm,setShowForm]=useState(false);
   const [showEmailSettings,setShowEmailSettings]=useState(false);
@@ -51,6 +52,7 @@ export default function RemindersPage(){
   const [recipients,setRecipients]=useState("");
   const [primaryEmail,setPrimaryEmail]=useState("");
   const [complianceRecipients,setComplianceRecipients]=useState("");
+  const [schedulerSecret,setSchedulerSecret]=useState("");
 
   async function getUser(){
     for(let attempt=0;attempt<6;attempt+=1){
@@ -140,6 +142,16 @@ export default function RemindersPage(){
     setTestingEmail(false);
   }
 
+  async function syncSchedulerSecret(){
+    if(schedulerSecret.length<32){setMessage("The scheduler secret must be at least 32 characters.");return;}
+    if(schedulerSecret.startsWith("sk_live_")||schedulerSecret.startsWith("sk_test_")){setMessage("Do not use a Stripe API key as the scheduler secret.");return;}
+    setSavingScheduler(true);setMessage("");
+    const {error}=await supabase.rpc("rotate_reminder_cron_secret",{p_new_secret:schedulerSecret});
+    if(error)setMessage(error.message);
+    else{setSchedulerSecret("");setMessage("Cloudflare scheduler security synchronized.");}
+    setSavingScheduler(false);
+  }
+
   const extras=parseEmails(complianceRecipients);
   return <main className="min-h-screen bg-[#f4f7fb] text-slate-950"><div className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
     <header className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Reminders</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Family Reminders</h1><p className="mt-2 text-sm text-slate-500">Add, edit and complete reminders in one place.</p></div><button onClick={openAddForm} className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"><Plus size={17}/> Add reminder</button></header>
@@ -164,7 +176,7 @@ export default function RemindersPage(){
     </section>
 
     <section className="mt-6 rounded-[28px] border-2 border-slate-300 bg-white"><button onClick={()=>setShowEmailSettings(visible=>!visible)} className="flex w-full items-center justify-between gap-4 px-5 py-5 text-left sm:px-6"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><Mail size={18}/></div><div><h2 className="font-semibold">Email Settings</h2><p className="mt-1 text-sm text-slate-500">Compliance reminders send 30, 7 and 1 day before due dates.</p></div></div><ChevronDown size={19} className={`transition ${showEmailSettings?"rotate-180":""}`}/></button>
-      {showEmailSettings?<div className="border-t-2 border-slate-200 px-5 py-5 sm:px-6"><div className="flex flex-wrap gap-2">{primaryEmail?<span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">Primary · {primaryEmail}</span>:null}{extras.map(email=><span key={email} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">{email}</span>)}</div><div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end"><label><span className="text-sm font-medium">Additional compliance recipients</span><textarea rows={2} value={complianceRecipients} onChange={event=>setComplianceRecipients(event.target.value)} placeholder="spouse@example.com, accountant@example.com" className="mt-2 w-full rounded-xl border-2 border-slate-300 px-3 py-2.5"/></label><button onClick={saveRecipients} disabled={savingSettings} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white"><Save size={16}/>{savingSettings?"Saving...":"Save settings"}</button></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4"><div><p className="text-sm font-semibold text-blue-950">Check email delivery</p><p className="mt-1 text-xs text-blue-800">Sends one clearly labeled test to your primary account.</p></div><button onClick={sendTestEmail} disabled={testingEmail||!primaryEmail} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"><Send size={15}/>{testingEmail?"Sending...":"Send Test Email"}</button></div><div className="mt-4 flex gap-3 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><Users size={18} className="mt-0.5 shrink-0"/><p>Your main account always receives compliance emails. Marking an item paid or completed stops future reminders for that item.</p></div></div>:null}
+      {showEmailSettings?<div className="border-t-2 border-slate-200 px-5 py-5 sm:px-6"><div className="flex flex-wrap gap-2">{primaryEmail?<span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">Primary · {primaryEmail}</span>:null}{extras.map(email=><span key={email} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">{email}</span>)}</div><div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end"><label><span className="text-sm font-medium">Additional compliance recipients</span><textarea rows={2} value={complianceRecipients} onChange={event=>setComplianceRecipients(event.target.value)} placeholder="spouse@example.com, accountant@example.com" className="mt-2 w-full rounded-xl border-2 border-slate-300 px-3 py-2.5"/></label><button onClick={saveRecipients} disabled={savingSettings} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white"><Save size={16}/>{savingSettings?"Saving...":"Save settings"}</button></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4"><div><p className="text-sm font-semibold text-blue-950">Check email delivery</p><p className="mt-1 text-xs text-blue-800">Sends one clearly labeled test to your primary account.</p></div><button onClick={sendTestEmail} disabled={testingEmail||!primaryEmail} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"><Send size={15}/>{testingEmail?"Sending...":"Send Test Email"}</button></div><div className="mt-4 rounded-2xl border-2 border-amber-200 bg-amber-50 p-4"><p className="text-sm font-semibold text-amber-950">Connect Cloudflare scheduler</p><p className="mt-1 text-xs text-amber-800">Paste the same new CRON_SECRET saved in Vercel and Cloudflare. It is converted to a secure hash and is never displayed here.</p><div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]"><input type="password" autoComplete="new-password" value={schedulerSecret} onChange={event=>setSchedulerSecret(event.target.value)} placeholder="Paste the new scheduler secret" className="h-12 rounded-xl border-2 border-amber-300 bg-white px-3"/><button type="button" onClick={syncSchedulerSecret} disabled={savingScheduler||schedulerSecret.length<32} className="rounded-xl bg-amber-600 px-5 text-sm font-semibold text-white disabled:opacity-50">{savingScheduler?"Synchronizing...":"Synchronize securely"}</button></div></div><div className="mt-4 flex gap-3 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><Users size={18} className="mt-0.5 shrink-0"/><p>Your main account always receives compliance emails. Marking an item paid or completed stops future reminders for that item.</p></div></div>:null}
     </section>
   </div></main>;
 }
