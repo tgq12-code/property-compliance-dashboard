@@ -2,7 +2,7 @@
   "name": "vo-family-reminder-scheduler",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
+    "deploy": "node scripts/configure-runtime-secret.mjs",
     "dev": "wrangler dev"
   },
   "devDependencies": {
