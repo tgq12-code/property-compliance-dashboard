@@ -8,5 +8,8 @@
   },
   "vars": {
     "REMINDER_ENDPOINT": "https://property-compliance-dashboard.vercel.app/api/cron/reminders"
+  },
+  "secrets": {
+    "required": ["CRON_SECRET"]
   }
 }
