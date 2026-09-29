@@ -571,7 +571,7 @@ function ActionPropertyCard({ property: p, completionNames, onEdit, onDelete, on
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex min-w-0 gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Home size={17} /></div>
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">You Pay</span>{needs && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Check tax</span>}</div><p className="mt-0.5 text-xs text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p>{p.completed_at && <CompletionStamp value={p.completed_at} by={p.completed_by ? completionNames[p.completed_by] : undefined} />}</div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">You Pay</span>{needs && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Check tax</span>}</div><PropertyAddress property={p} />{p.completed_at && <CompletionStamp value={p.completed_at} by={p.completed_by ? completionNames[p.completed_by] : undefined} />}</div>
             </div>
             <CardActions property={p} onEdit={onEdit} onDelete={onDelete} onToggleComplete={onToggleComplete} />
           </div>
@@ -605,7 +605,7 @@ function ManagedPropertyCard({ property: p, completionNames, onEdit, onDelete, o
       <div className="h-0.5 bg-gradient-to-r from-blue-600 to-sky-300" />
       <div className="p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-2.5"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ShieldCheck size={17} /></div><div><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Lender Pays</span></div><p className="mt-0.5 text-xs text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p>{p.completed_at && <CompletionStamp value={p.completed_at} by={p.completed_by ? completionNames[p.completed_by] : undefined} />}</div></div>
+        <div className="flex min-w-0 gap-2.5"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ShieldCheck size={17} /></div><div><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Lender Pays</span></div><PropertyAddress property={p} />{p.completed_at && <CompletionStamp value={p.completed_at} by={p.completed_by ? completionNames[p.completed_by] : undefined} />}</div></div>
         <CardActions property={p} onEdit={onEdit} onDelete={onDelete} onToggleComplete={onToggleComplete} />
       </div>
       <div className="mt-2.5 grid grid-cols-2 gap-1.5"><InfoTile label="Estimated value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly tax" value={money(p.annual_property_tax)} accent="amber" /></div>
@@ -731,6 +731,11 @@ function CardActions({ property, onEdit, onDelete, onToggleComplete }: { propert
 
 function CompletionStamp({ value, by }: { value: string; by?: string }) {
   return <p className="mt-1 text-[11px] font-medium text-emerald-700">{completionLabel(value, by)}</p>;
+}
+
+function PropertyAddress({ property }: { property: PropertyRecord }) {
+  const address = [property.street_address, property.city, property.state, property.zip].filter(Boolean).join(", ");
+  return <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500"><span>{address}</span><span className="hidden text-slate-300 sm:inline" aria-hidden="true">·</span><span className={property.apn ? "font-medium text-blue-700" : "text-slate-400"}>Parcel: {property.apn || "Not entered"}</span></p>;
 }
 
 function SectionHeading({ title, count, subtitle }: { title: string; count: number; subtitle: string }) {
