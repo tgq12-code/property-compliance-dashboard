@@ -20,8 +20,10 @@ import { createClient } from "@/lib/supabase-browser";
 type Property = {
   id: string;
   name: string;
+  street_address: string;
   city: string | null;
   state: string | null;
+  zip: string | null;
   escrowed: boolean;
   annual_property_tax: number | null;
 };
@@ -57,6 +59,7 @@ type UpcomingItem = {
   date: string;
   amount: number | null;
   status: string;
+  context: string | null;
 };
 
 const money = (n: number | null) =>
@@ -73,6 +76,12 @@ const dateLabel = (iso: string) =>
     "en-US",
     { month: "short", day: "numeric", year: "numeric" },
   );
+
+const propertyAddress = (property?: Property) =>
+  property
+    ? [property.street_address, property.city, [property.state, property.zip].filter(Boolean).join(" ")]
+        .filter(Boolean).join(", ")
+    : null;
 
 const closedStatus = (status: string) =>
   ["completed", "paid", "cancelled", "canceled"].includes(
@@ -117,7 +126,7 @@ export default function DashboardPage() {
             await Promise.all([
               supabase
                 .from("properties")
-                .select("id,name,city,state,escrowed,annual_property_tax")
+                .select("id,name,street_address,city,state,zip,escrowed,annual_property_tax")
                 .order("created_at", { ascending: false }),
               supabase
                 .from("businesses")
@@ -209,6 +218,9 @@ export default function DashboardPage() {
       date: obligation.due_date,
       amount: obligation.amount_due,
       status: "Due soon",
+      context: obligation.property_id
+        ? propertyAddress(properties.find(property => property.id === obligation.property_id))
+        : businesses.find(business => business.id === obligation.business_id)?.name ?? null,
     })),
     ...reminders
       .filter((reminder) => {
@@ -222,6 +234,7 @@ export default function DashboardPage() {
         date: reminder.starts_at,
         amount: null,
         status: "Reminder",
+        context: null,
       })),
   ]
     .sort(
@@ -315,6 +328,9 @@ export default function DashboardPage() {
               <div className="divide-y divide-slate-100">
                 {visibleAttentionItems.map((item) => {
                   const isBusiness = Boolean(item.business_id);
+                  const context = item.property_id
+                    ? propertyAddress(properties.find(property => property.id === item.property_id))
+                    : businesses.find(business => business.id === item.business_id)?.name ?? null;
                   const isPastDue =
                     new Date(`${item.due_date}T12:00:00`) < today;
                   const Icon = isBusiness ? Building2 : Landmark;
@@ -335,6 +351,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="min-w-[180px] flex-1">
                         <p className="truncate text-sm font-semibold">{item.title}</p>
+                        {context && <p className="mt-0.5 text-xs font-medium text-slate-700">{context}</p>}
                         <p className="mt-0.5 text-xs text-slate-500">
                           {item.amount_due == null
                             ? isBusiness
@@ -497,6 +514,7 @@ function UpcomingRow({ item }: { item: UpcomingItem }) {
       <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${colors}`}><Icon size={17} /></div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{item.title}</p>
+        {item.context && <p className="mt-0.5 text-xs font-medium text-slate-700">{item.context}</p>}
         <p className="mt-0.5 text-xs text-slate-500">{item.amount == null ? item.kind === "reminder" ? "Family reminder" : "Deadline" : money(item.amount)}</p>
       </div>
       <div className="shrink-0 text-right">
