@@ -60,9 +60,9 @@ type PropertyRecord = {
   completed_by: string | null;
 };
 
-type TaxCompletion = { property_id: string; tax_cycle: string; installment_number: number; due_date: string; completed_at: string | null; completed_by: string | null };
+type TaxCompletion = { property_id: string; tax_cycle: string; installment_number: number; due_date: string; completed_at: string | null; completed_by: string | null; amount_paid: number | null };
 type TaxObligation = { id: string; property_id: string; title: string; due_date: string; amount_due: number | null; status: string; completed_at: string | null; completed_by: string | null };
-type TaxInstallment = { number: number; cycle: string; dueDate: string; amount: number | null; obligationId: string | null; completedAt: string | null; completedBy: string | null };
+type TaxInstallment = { number: number; cycle: string; dueDate: string; suggestedAmount: number | null; amountPaid: number | null; obligationId: string | null; completedAt: string | null; completedBy: string | null };
 
 type FormState = {
   name: string;
@@ -259,7 +259,8 @@ function taxInstallments(property: PropertyRecord, obligations: TaxObligation[],
     return {
       number, cycle: schedule.cycle,
       dueDate: obligation?.due_date ?? installmentDate(label),
-      amount: obligation?.amount_due ?? (property.annual_property_tax == null ? null : Number(property.annual_property_tax) / schedule.dueDates.length),
+      suggestedAmount: obligation?.amount_due ?? (property.annual_property_tax == null ? null : Number(property.annual_property_tax) / schedule.dueDates.length),
+      amountPaid: completion?.amount_paid ?? null,
       obligationId: obligation?.id ?? null,
       completedAt: completion?.completed_at ?? obligation?.completed_at ?? null,
       completedBy: completion?.completed_by ?? obligation?.completed_by ?? null,
@@ -326,7 +327,7 @@ export default function PropertiesPage() {
     }
     const [propertyResult, installmentResult, obligationResult, profileResult] = await Promise.all([
       supabase.from("properties").select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date,completed_at,completed_by").order("created_at", { ascending: false }),
-      supabase.from("property_tax_installments").select("property_id,tax_cycle,installment_number,due_date,completed_at,completed_by"),
+      supabase.from("property_tax_installments").select("property_id,tax_cycle,installment_number,due_date,completed_at,completed_by,amount_paid"),
       supabase.from("obligations").select("id,property_id,title,due_date,amount_due,status,completed_at,completed_by").eq("category", "property_tax").not("property_id", "is", null),
       supabase.from("profiles").select("id,email"),
     ]);
@@ -461,16 +462,37 @@ export default function PropertiesPage() {
   async function toggleInstallment(property: PropertyRecord, item: TaxInstallment) {
     const key = `${property.id}:${item.cycle}:${item.number}`;
     setPendingInstallment(key);
-    const { error } = await supabase.rpc("set_property_tax_installment_status", {
+    const { error } = await supabase.rpc("set_property_tax_installment_payment", {
       p_property_id: property.id, p_tax_cycle: item.cycle, p_installment_number: item.number,
-      p_due_date: item.dueDate, p_complete: !item.completedAt, p_obligation_id: item.obligationId,
+      p_due_date: item.dueDate, p_complete: false, p_obligation_id: item.obligationId, p_amount_paid: null,
     });
     if (error) setMessage(error.message);
     else {
-      setMessage(`${property.name}: ${item.number === 1 ? "1st" : "2nd"} installment ${item.completedAt ? "reopened" : "marked complete"}.`);
+      setMessage(`${property.name}: ${item.number === 1 ? "1st" : "2nd"} installment reopened.`);
       await load();
     }
     setPendingInstallment(null);
+  }
+
+  async function saveInstallmentAmount(property: PropertyRecord, item: TaxInstallment, amount: number) {
+    if (!Number.isFinite(amount) || amount < 0) { setMessage("Enter a valid payment amount."); return false; }
+    const key = `${property.id}:${item.cycle}:${item.number}`;
+    setPendingInstallment(key);
+    const result = item.completedAt
+      ? await supabase.from("property_tax_installments").update({ amount_paid: amount }).eq("property_id", property.id).eq("tax_cycle", item.cycle).eq("installment_number", item.number).not("completed_at", "is", null).select("id").maybeSingle()
+      : await supabase.rpc("set_property_tax_installment_payment", {
+          p_property_id: property.id, p_tax_cycle: item.cycle, p_installment_number: item.number,
+          p_due_date: item.dueDate, p_complete: true, p_obligation_id: item.obligationId, p_amount_paid: amount,
+        });
+    if (result.error || (item.completedAt && !result.data)) {
+      setMessage(result.error?.message ?? "Payment amount could not be updated. Please refresh and try again.");
+      setPendingInstallment(null);
+      return false;
+    }
+    setMessage(item.completedAt ? "Payment amount updated." : `${property.name}: ${item.number === 1 ? "1st" : "2nd"} installment marked complete.`);
+    await load();
+    setPendingInstallment(null);
+    return true;
   }
 
   async function signOut() {
@@ -591,14 +613,14 @@ export default function PropertiesPage() {
               {filter !== "Lender Pays" && (
                 <section>
                   <SectionHeading title="You Pay the Property Tax" count={directPay.length} subtitle="You are responsible for paying the county directly." />
-                  {directPay.length === 0 ? <EmptyState text="No direct-pay properties in this view." /> : <div className="mt-3 space-y-2">{directPay.map((p) => <ActionPropertyCard key={p.id} property={p} completionNames={completionNames} installments={taxInstallments(p, taxObligations, taxCompletions)} pendingInstallment={pendingInstallment} onEdit={edit} onDelete={remove} onToggleInstallment={toggleInstallment} />)}</div>}
+                  {directPay.length === 0 ? <EmptyState text="No direct-pay properties in this view." /> : <div className="mt-3 space-y-2">{directPay.map((p) => <ActionPropertyCard key={p.id} property={p} completionNames={completionNames} installments={taxInstallments(p, taxObligations, taxCompletions)} pendingInstallment={pendingInstallment} onEdit={edit} onDelete={remove} onToggleInstallment={toggleInstallment} onSaveAmount={saveInstallmentAmount} />)}</div>}
                 </section>
               )}
 
               {filter !== "You Pay" && (
                 <section>
                   <SectionHeading title="Lender Pays the Property Tax" count={escrowed.length} subtitle="Your mortgage company handles the tax payment through escrow." />
-                  {escrowed.length === 0 ? <EmptyState text="No escrowed properties in this view." /> : <div className="mt-3 grid gap-2 xl:grid-cols-2">{escrowed.map((p) => <ManagedPropertyCard key={p.id} property={p} completionNames={completionNames} installments={taxInstallments(p, taxObligations, taxCompletions)} pendingInstallment={pendingInstallment} onEdit={edit} onDelete={remove} onToggleInstallment={toggleInstallment} />)}</div>}
+                  {escrowed.length === 0 ? <EmptyState text="No escrowed properties in this view." /> : <div className="mt-3 grid gap-2 xl:grid-cols-2">{escrowed.map((p) => <ManagedPropertyCard key={p.id} property={p} completionNames={completionNames} installments={taxInstallments(p, taxObligations, taxCompletions)} pendingInstallment={pendingInstallment} onEdit={edit} onDelete={remove} onToggleInstallment={toggleInstallment} onSaveAmount={saveInstallmentAmount} />)}</div>}
                 </section>
               )}
             </div>
@@ -609,9 +631,9 @@ export default function PropertiesPage() {
   );
 }
 
-type PropertyCardProps = { property: PropertyRecord; completionNames: Record<string,string>; installments: TaxInstallment[]; pendingInstallment: string | null; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleInstallment: (p: PropertyRecord, item: TaxInstallment) => void };
+type PropertyCardProps = { property: PropertyRecord; completionNames: Record<string,string>; installments: TaxInstallment[]; pendingInstallment: string | null; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleInstallment: (p: PropertyRecord, item: TaxInstallment) => void; onSaveAmount: (p: PropertyRecord, item: TaxInstallment, amount: number) => Promise<boolean> };
 
-function ActionPropertyCard({ property: p, completionNames, installments, pendingInstallment, onEdit, onDelete, onToggleInstallment }: PropertyCardProps) {
+function ActionPropertyCard({ property: p, completionNames, installments, pendingInstallment, onEdit, onDelete, onToggleInstallment, onSaveAmount }: PropertyCardProps) {
   const schedule = getTaxSchedule(p);
   const needs = p.property_tax_status === "needs_confirmation";
   const nextDue = nextInstallmentDue(installments);
@@ -635,7 +657,7 @@ function ActionPropertyCard({ property: p, completionNames, installments, pendin
             <InfoTile label="Next tax payment due" value={nextDue} accent="rose" />
           </div>
 
-          <InstallmentRows property={p} installments={installments} completionNames={completionNames} pendingInstallment={pendingInstallment} onToggle={onToggleInstallment} />
+          <InstallmentRows property={p} installments={installments} completionNames={completionNames} pendingInstallment={pendingInstallment} onToggle={onToggleInstallment} onSaveAmount={onSaveAmount} />
 
           <section className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Mortgage and insurance</p>
@@ -653,7 +675,7 @@ function ActionPropertyCard({ property: p, completionNames, installments, pendin
   );
 }
 
-function ManagedPropertyCard({ property: p, completionNames, installments, pendingInstallment, onEdit, onDelete, onToggleInstallment }: PropertyCardProps) {
+function ManagedPropertyCard({ property: p, completionNames, installments, pendingInstallment, onEdit, onDelete, onToggleInstallment, onSaveAmount }: PropertyCardProps) {
   const schedule = getTaxSchedule(p);
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -664,7 +686,7 @@ function ManagedPropertyCard({ property: p, completionNames, installments, pendi
         <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
       </div>
       <div className="mt-2.5 grid grid-cols-2 gap-1.5"><InfoTile label="Estimated value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly tax" value={money(p.annual_property_tax)} accent="amber" /></div>
-      <InstallmentRows property={p} installments={installments} completionNames={completionNames} pendingInstallment={pendingInstallment} onToggle={onToggleInstallment} />
+      <InstallmentRows property={p} installments={installments} completionNames={completionNames} pendingInstallment={pendingInstallment} onToggle={onToggleInstallment} onSaveAmount={onSaveAmount} />
       <section className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5"><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Mortgage and insurance</p><MortgageInsuranceSummary property={p} compact /><PropertySourceButtons property={p} /></section>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-2"><p className="text-[11px] text-slate-500">{schedule?.frequency ?? "Tax schedule not entered"} · <span className="font-semibold text-red-700">Next: {nextInstallmentDue(installments)}</span></p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700">County Tax <ExternalLink size={11} /></a>}</div>
       </div>
@@ -784,16 +806,26 @@ function FinancialValue({ label, value }: { label: string; value: string }) {
 function CardActions({ property, onEdit, onDelete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void }) {
   return <div className="flex shrink-0 flex-wrap justify-end gap-1"><button onClick={() => onEdit(property)} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700"><Pencil size={13} /> Edit</button><button onClick={() => onDelete(property.id)} aria-label="Delete property" className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button></div>; }
 
-function InstallmentRows({ property, installments, completionNames, pendingInstallment, onToggle }: {
+function InstallmentRows({ property, installments, completionNames, pendingInstallment, onToggle, onSaveAmount }: {
   property: PropertyRecord; installments: TaxInstallment[]; completionNames: Record<string, string>;
   pendingInstallment: string | null; onToggle: (p: PropertyRecord, item: TaxInstallment) => void;
+  onSaveAmount: (p: PropertyRecord, item: TaxInstallment, amount: number) => Promise<boolean>;
 }) {
+  const [editingNumber, setEditingNumber] = useState<number | null>(null);
+  const [amountInput, setAmountInput] = useState("");
+  function openAmount(item: TaxInstallment) {
+    setEditingNumber(item.number);
+    const initial = item.completedAt ? item.amountPaid : item.suggestedAmount;
+    setAmountInput(initial == null ? "" : Number(initial).toFixed(2));
+  }
   if (!installments.length) return <p className="mt-2 text-xs text-slate-500">Tax installment dates are not entered yet.</p>;
   return <div className="mt-2 grid gap-1.5 sm:grid-cols-2">{installments.map(item => {
     const pending = pendingInstallment === `${property.id}:${item.cycle}:${item.number}`;
+    const editing = editingNumber === item.number;
     return <div key={`${item.cycle}-${item.number}`} className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border px-2.5 py-2 ${item.completedAt ? "border-emerald-200 bg-emerald-50/70" : "border-blue-100 bg-blue-50/40"}`}>
-      <div className="min-w-0"><p className="text-xs font-semibold text-slate-900">{installments.length === 1 ? "Annual tax payment" : `${item.number === 1 ? "1st" : "2nd"} installment`} <span className="font-normal text-slate-500">· {formatDate(item.dueDate)}</span></p>{item.completedAt ? <CompletionStamp value={item.completedAt} by={item.completedBy ? completionNames[item.completedBy] : undefined} /> : null}</div>
-      <button type="button" disabled={pending || Boolean(pendingInstallment)} onClick={() => onToggle(property, item)} className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-50 ${item.completedAt ? "border border-emerald-200 bg-white text-emerald-800" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}><CheckCircle2 size={12} />{pending ? "Saving..." : item.completedAt ? "Reopen" : "Mark complete"}</button>
+      <div className="min-w-0"><p className="text-xs font-semibold text-slate-900">{installments.length === 1 ? "Annual tax payment" : `${item.number === 1 ? "1st" : "2nd"} installment`} <span className="font-normal text-slate-500">· {formatDate(item.dueDate)}</span>{item.completedAt && <span className="ml-2 text-emerald-800">Paid: {item.amountPaid == null ? "Amount not recorded" : preciseMoney(item.amountPaid)}</span>}</p>{item.completedAt ? <CompletionStamp value={item.completedAt} by={item.completedBy ? completionNames[item.completedBy] : undefined} /> : null}</div>
+      <div className="flex shrink-0 gap-1">{item.completedAt ? <><button type="button" disabled={Boolean(pendingInstallment)} onClick={() => openAmount(item)} className="rounded-md border border-blue-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 disabled:opacity-50">Edit amount</button><button type="button" disabled={Boolean(pendingInstallment)} onClick={() => onToggle(property, item)} className="rounded-md border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-800 disabled:opacity-50">{pending ? "Saving..." : "Reopen"}</button></> : <button type="button" disabled={Boolean(pendingInstallment)} onClick={() => openAmount(item)} className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"><CheckCircle2 size={12} />Mark complete</button>}</div>
+      {editing && <form className="flex w-full flex-wrap items-end gap-2 border-t border-slate-200 pt-2" onSubmit={async event => { event.preventDefault(); if (!amountInput.trim()) return; if (await onSaveAmount(property, item, Number(amountInput))) setEditingNumber(null); }}><label className="text-[11px] font-semibold text-slate-700">Amount actually paid<input autoFocus required type="number" min="0" step="0.01" inputMode="decimal" value={amountInput} onChange={event => setAmountInput(event.target.value)} className="mt-1 block w-32 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900" /></label><button disabled={Boolean(pendingInstallment)} className="rounded-md bg-blue-700 px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">{pending ? "Saving..." : item.completedAt ? "Save amount" : "Confirm payment"}</button><button type="button" onClick={() => setEditingNumber(null)} className="px-1 py-1.5 text-[11px] text-slate-600">Cancel</button></form>}
     </div>;
   })}</div>;
 }
