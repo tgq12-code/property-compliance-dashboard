@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { CalendarDays, CheckCircle2, ChevronDown, Clock3, Mail, Pencil, Plus, Save, Send, Trash2, Users } from "lucide-react";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { createClient } from "@/lib/supabase-browser";
+import { completionLabel } from "@/lib/completion";
 
 type Recurrence = "none" | "daily" | "weekly" | "monthly" | "yearly";
-type Reminder = { id:string; title:string; subject:string; notes:string|null; starts_at:string; recurrence:Recurrence; recipient_emails:string[]; sender_email:string; active:boolean; completed_at:string|null };
+type Reminder = { id:string; title:string; subject:string; notes:string|null; starts_at:string; recurrence:Recurrence; recipient_emails:string[]; sender_email:string; active:boolean; completed_at:string|null; completed_by:string|null };
 
 const recurrenceLabels:Record<Recurrence,string>={none:"One time",daily:"Daily",weekly:"Weekly",monthly:"Monthly",yearly:"Annually"};
 const parseEmails=(value:string)=>Array.from(new Set(value.split(/[;,\n]/).map(email=>email.trim()).filter(Boolean)));
@@ -53,6 +54,8 @@ export default function RemindersPage(){
   const [primaryEmail,setPrimaryEmail]=useState("");
   const [complianceRecipients,setComplianceRecipients]=useState("");
   const [schedulerSecret,setSchedulerSecret]=useState("");
+  const [completionNames,setCompletionNames]=useState<Record<string,string>>({});
+  const [workspaceOwner,setWorkspaceOwner]=useState<string|null>(null);
 
   async function getUser(){
     for(let attempt=0;attempt<6;attempt+=1){
@@ -68,10 +71,15 @@ export default function RemindersPage(){
     const user=await getUser();
     if(!user){router.replace("/");return;}
     setPrimaryEmail(user.email??"");
-    const [reminderResult,preferenceResult]=await Promise.all([
-      supabase.from("family_reminders").select("id,title,subject,notes,starts_at,recurrence,recipient_emails,sender_email,active,completed_at").eq("user_id",user.id).order("starts_at",{ascending:true}),
-      supabase.from("reminder_preferences").select("compliance_recipient_emails").eq("user_id",user.id).maybeSingle(),
+    const {data:ownerId,error:ownerError}=await supabase.rpc("family_workspace_owner_id");
+    if(ownerError||!ownerId){setMessage(ownerError?.message??"Workspace access unavailable.");setLoading(false);return;}
+    setWorkspaceOwner(ownerId);
+    const [reminderResult,preferenceResult,profilesResult]=await Promise.all([
+      supabase.from("family_reminders").select("id,title,subject,notes,starts_at,recurrence,recipient_emails,sender_email,active,completed_at,completed_by").eq("user_id",ownerId).order("starts_at",{ascending:true}),
+      supabase.from("reminder_preferences").select("compliance_recipient_emails").eq("user_id",ownerId).maybeSingle(),
+      supabase.from("profiles").select("id,email"),
     ]);
+    setCompletionNames(Object.fromEntries((profilesResult.data??[]).map(p=>[p.id,p.email??"Family member"])));
     if(reminderResult.error)setMessage(reminderResult.error.message);else setReminders((reminderResult.data??[]) as Reminder[]);
     if(preferenceResult.error)setMessage(preferenceResult.error.message);else setComplianceRecipients(((preferenceResult.data?.compliance_recipient_emails??[]) as string[]).join(", "));
     setLoading(false);
@@ -97,7 +105,8 @@ export default function RemindersPage(){
     const user=await getUser();
     if(!user){router.replace("/");return;}
     const extra=parseEmails(complianceRecipients).filter(email=>email.toLowerCase()!==(user.email??"").toLowerCase());
-    const {error}=await supabase.from("reminder_preferences").upsert({user_id:user.id,email_enabled:true,reminder_days:[30,7,1],compliance_recipient_emails:extra,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+    if(!workspaceOwner){setMessage("Workspace access unavailable.");setSavingSettings(false);return;}
+    const {error}=await supabase.from("reminder_preferences").upsert({user_id:workspaceOwner,email_enabled:true,reminder_days:[30,7,1],compliance_recipient_emails:extra,updated_at:new Date().toISOString()},{onConflict:"user_id"});
     setMessage(error?error.message:"Email settings saved.");if(!error)setComplianceRecipients(extra.join(", "));setSavingSettings(false);
   }
 
@@ -110,9 +119,10 @@ export default function RemindersPage(){
     const emailRecipients=parseEmails(recipients);if(!emailRecipients.length&&user.email)emailRecipients.push(user.email);
     const schedule=scheduledDate.toISOString();
     const values={title:title.trim(),subject:subject.trim(),notes:notes.trim()||null,starts_at:schedule,next_send_at:schedule,recurrence,recipient_emails:emailRecipients,sender_email:user.email??"",active:true,completed_at:null,processing_started_at:null,last_error:null,send_failures:0,updated_at:new Date().toISOString()};
+    if(!workspaceOwner){setMessage("Workspace access unavailable.");setSaving(false);return;}
     const result=editingId
-      ? await supabase.from("family_reminders").update(values).eq("id",editingId).eq("user_id",user.id).select("id").maybeSingle()
-      : await supabase.from("family_reminders").insert({...values,user_id:user.id}).select("id").single();
+      ? await supabase.from("family_reminders").update(values).eq("id",editingId).eq("user_id",workspaceOwner).select("id").maybeSingle()
+      : await supabase.from("family_reminders").insert({...values,user_id:workspaceOwner}).select("id").single();
     if(result.error)setMessage(result.error.message);
     else if(editingId&&!result.data)setMessage("That reminder could not be updated. Please refresh and try again.");
     else{const savedMessage=editingId?"Reminder updated.":"Reminder saved.";closeForm();setMessage(savedMessage);await load();}
@@ -122,7 +132,7 @@ export default function RemindersPage(){
   async function remove(id:string){
     if(!confirm("Delete this reminder?"))return;
     const user=await getUser();if(!user){router.replace("/");return;}
-    const {error}=await supabase.from("family_reminders").delete().eq("id",id).eq("user_id",user.id);
+    const {error}=await supabase.from("family_reminders").delete().eq("id",id).eq("user_id",workspaceOwner);
     if(error)setMessage(error.message);else await load();
   }
 
@@ -130,7 +140,7 @@ export default function RemindersPage(){
     if(reminder.completed_at)return;
     const user=await getUser();if(!user){router.replace("/");return;}
     const completedAt=new Date().toISOString();
-    const {error}=await supabase.from("family_reminders").update({completed_at:completedAt,active:false,updated_at:completedAt}).eq("id",reminder.id).eq("user_id",user.id);
+    const {error}=await supabase.from("family_reminders").update({completed_at:completedAt,active:false,updated_at:completedAt}).eq("id",reminder.id).eq("user_id",workspaceOwner);
     if(error)setMessage(error.message);else{setMessage(`${reminder.title} marked complete.`);await load();}
   }
 
@@ -172,7 +182,7 @@ export default function RemindersPage(){
     </section>:null}
 
     <section className="mt-6 overflow-hidden rounded-[28px] border-2 border-blue-200 bg-white"><div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/70 px-5 py-4 sm:px-6"><div><h2 className="font-semibold">Reminders</h2><p className="mt-1 text-sm text-slate-500">Upcoming and completed family reminders.</p></div><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700"><CalendarDays size={19}/></div></div>
-      {loading?<p className="px-6 py-8 text-sm text-slate-500">Loading reminders...</p>:reminders.length===0?<div className="px-6 py-10 text-center"><CalendarDays className="mx-auto text-slate-400" size={30}/><p className="mt-3 font-semibold">No reminders yet</p><p className="mt-1 text-sm text-slate-500">Use Add reminder whenever you want the family notified.</p></div>:<div className="divide-y divide-slate-100">{reminders.map(reminder=>{const schedule=formatReminderSchedule(reminder);return <div key={reminder.id} className={`grid gap-4 px-5 py-4 sm:px-6 md:grid-cols-[1.2fr_.8fr_1fr_auto] md:items-center ${reminder.completed_at?"bg-emerald-50/40":""}`}><div><p className="font-semibold">{reminder.title}</p><p className="mt-1 text-sm text-slate-500">{reminder.subject}</p>{reminder.notes?<p className="mt-1 line-clamp-2 text-xs text-slate-400">{reminder.notes}</p>:null}{reminder.completed_at?<p className="mt-1 text-xs font-medium text-emerald-700">Completed {new Date(reminder.completed_at).toLocaleString("en-US",{month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"})}</p>:null}</div><div><p className="text-xs uppercase tracking-wide text-slate-400">Schedule</p><p className="mt-1 text-sm font-semibold">{schedule.main}</p><p className="mt-1 text-xs text-slate-500">{schedule.detail}</p></div><div><p className="text-xs uppercase tracking-wide text-slate-400">Email to</p><p className="mt-1 text-sm text-slate-700">{reminder.recipient_emails.length?reminder.recipient_emails.join(", "):"Primary account"}</p></div><div className="flex flex-wrap gap-2 md:justify-end"><button onClick={()=>openEditForm(reminder)} className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50"><Pencil size={14}/> Edit</button><button onClick={()=>markComplete(reminder)} disabled={Boolean(reminder.completed_at)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold ${reminder.completed_at?"bg-emerald-100 text-emerald-700":"bg-emerald-600 text-white"}`}><CheckCircle2 size={14}/>{reminder.completed_at?"Completed":"Mark Complete"}</button><button onClick={()=>remove(reminder.id)} aria-label={`Delete ${reminder.title}`} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:border-red-200 hover:text-red-600"><Trash2 size={16}/></button></div></div>;})}</div>}
+      {loading?<p className="px-6 py-8 text-sm text-slate-500">Loading reminders...</p>:reminders.length===0?<div className="px-6 py-10 text-center"><CalendarDays className="mx-auto text-slate-400" size={30}/><p className="mt-3 font-semibold">No reminders yet</p><p className="mt-1 text-sm text-slate-500">Use Add reminder whenever you want the family notified.</p></div>:<div className="divide-y divide-slate-100">{reminders.map(reminder=>{const schedule=formatReminderSchedule(reminder);return <div key={reminder.id} className={`grid gap-4 px-5 py-4 sm:px-6 md:grid-cols-[1.2fr_.8fr_1fr_auto] md:items-center ${reminder.completed_at?"bg-emerald-50/40":""}`}><div><p className="font-semibold">{reminder.title}</p><p className="mt-1 text-sm text-slate-500">{reminder.subject}</p>{reminder.notes?<p className="mt-1 line-clamp-2 text-xs text-slate-400">{reminder.notes}</p>:null}{reminder.completed_at?<p className="mt-1 text-xs font-medium text-emerald-700">{completionLabel(reminder.completed_at,reminder.completed_by?completionNames[reminder.completed_by]:undefined)}</p>:null}</div><div><p className="text-xs uppercase tracking-wide text-slate-400">Schedule</p><p className="mt-1 text-sm font-semibold">{schedule.main}</p><p className="mt-1 text-xs text-slate-500">{schedule.detail}</p></div><div><p className="text-xs uppercase tracking-wide text-slate-400">Email to</p><p className="mt-1 text-sm text-slate-700">{reminder.recipient_emails.length?reminder.recipient_emails.join(", "):"Primary account"}</p></div><div className="flex flex-wrap gap-2 md:justify-end"><button onClick={()=>openEditForm(reminder)} className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50"><Pencil size={14}/> Edit</button><button onClick={()=>markComplete(reminder)} disabled={Boolean(reminder.completed_at)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold ${reminder.completed_at?"bg-emerald-100 text-emerald-700":"bg-emerald-600 text-white"}`}><CheckCircle2 size={14}/>{reminder.completed_at?"Completed":"Mark Complete"}</button><button onClick={()=>remove(reminder.id)} aria-label={`Delete ${reminder.title}`} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:border-red-200 hover:text-red-600"><Trash2 size={16}/></button></div></div>;})}</div>}
     </section>
 
     <section className="mt-6 rounded-[28px] border-2 border-slate-300 bg-white"><button onClick={()=>setShowEmailSettings(visible=>!visible)} className="flex w-full items-center justify-between gap-4 px-5 py-5 text-left sm:px-6"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><Mail size={18}/></div><div><h2 className="font-semibold">Email Settings</h2><p className="mt-1 text-sm text-slate-500">Compliance reminders send 30, 7 and 1 day before due dates.</p></div></div><ChevronDown size={19} className={`transition ${showEmailSettings?"rotate-180":""}`}/></button>

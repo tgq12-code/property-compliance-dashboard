@@ -159,7 +159,7 @@ export default function DashboardPage() {
     setUpdatingId(id);
     const { error } = await supabase
       .from("obligations")
-      .update({ status: "paid", updated_at: new Date().toISOString() })
+      .update({ status: "paid", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq("id", id);
 
     if (!error) {

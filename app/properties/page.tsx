@@ -21,6 +21,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
+import { completionLabel } from "@/lib/completion";
 
 type PropertyRecord = {
   id: string;
@@ -56,6 +57,7 @@ type PropertyRecord = {
   insurance_policy_start_date: string | null;
   insurance_policy_expiration_date: string | null;
   completed_at: string | null;
+  completed_by: string | null;
 };
 
 type FormState = {
@@ -264,6 +266,7 @@ export default function PropertiesPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState("All");
+  const [completionNames, setCompletionNames] = useState<Record<string, string>>({});
 
   async function getUser() {
     for (let i = 0; i < 6; i += 1) {
@@ -283,10 +286,12 @@ export default function PropertiesPage() {
     }
     const { data, error } = await supabase
       .from("properties")
-      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date,completed_at")
+      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date,completed_at,completed_by")
       .order("created_at", { ascending: false });
     if (error) setMessage(error.message);
     else setProperties((data ?? []) as PropertyRecord[]);
+    const { data: profiles } = await supabase.from("profiles").select("id,email");
+    setCompletionNames(Object.fromEntries((profiles ?? []).map(p => [p.id, p.email ?? "Family member"])));
     setLoading(false);
   }
 
@@ -384,7 +389,11 @@ export default function PropertiesPage() {
     };
     const { error } = editingId
       ? await supabase.from("properties").update(payload).eq("id", editingId)
-      : await supabase.from("properties").insert({ user_id: user.id, ...payload });
+      : await (async () => {
+          const { data: ownerId, error: ownerError } = await supabase.rpc("family_workspace_owner_id");
+          if (ownerError || !ownerId) return { error: ownerError ?? new Error("Workspace access unavailable.") };
+          return supabase.from("properties").insert({ user_id: ownerId, ...payload });
+        })();
     if (error) setMessage(error.message);
     else {
       setShowForm(false);
@@ -531,14 +540,14 @@ export default function PropertiesPage() {
               {filter !== "Lender Pays" && (
                 <section>
                   <SectionHeading title="You Pay the Property Tax" count={directPay.length} subtitle="You are responsible for paying the county directly." />
-                  {directPay.length === 0 ? <EmptyState text="No direct-pay properties in this view." /> : <div className="mt-3 space-y-2">{directPay.map((p) => <ActionPropertyCard key={p.id} property={p} onEdit={edit} onDelete={remove} onToggleComplete={toggleComplete} />)}</div>}
+                  {directPay.length === 0 ? <EmptyState text="No direct-pay properties in this view." /> : <div className="mt-3 space-y-2">{directPay.map((p) => <ActionPropertyCard key={p.id} property={p} completionNames={completionNames} onEdit={edit} onDelete={remove} onToggleComplete={toggleComplete} />)}</div>}
                 </section>
               )}
 
               {filter !== "You Pay" && (
                 <section>
                   <SectionHeading title="Lender Pays the Property Tax" count={escrowed.length} subtitle="Your mortgage company handles the tax payment through escrow." />
-                  {escrowed.length === 0 ? <EmptyState text="No escrowed properties in this view." /> : <div className="mt-3 grid gap-2 xl:grid-cols-2">{escrowed.map((p) => <ManagedPropertyCard key={p.id} property={p} onEdit={edit} onDelete={remove} onToggleComplete={toggleComplete} />)}</div>}
+                  {escrowed.length === 0 ? <EmptyState text="No escrowed properties in this view." /> : <div className="mt-3 grid gap-2 xl:grid-cols-2">{escrowed.map((p) => <ManagedPropertyCard key={p.id} property={p} completionNames={completionNames} onEdit={edit} onDelete={remove} onToggleComplete={toggleComplete} />)}</div>}
                 </section>
               )}
             </div>
@@ -549,7 +558,7 @@ export default function PropertiesPage() {
   );
 }
 
-function ActionPropertyCard({ property: p, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
+function ActionPropertyCard({ property: p, completionNames, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; completionNames: Record<string,string>; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
   const schedule = getTaxSchedule(p);
   const needs = p.property_tax_status === "needs_confirmation";
   const nextDue = getNextDue(schedule);
@@ -562,7 +571,7 @@ function ActionPropertyCard({ property: p, onEdit, onDelete, onToggleComplete }:
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex min-w-0 gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Home size={17} /></div>
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">You Pay</span>{needs && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Check tax</span>}</div><p className="mt-0.5 text-xs text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p>{p.completed_at && <CompletionStamp value={p.completed_at} />}</div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">You Pay</span>{needs && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Check tax</span>}</div><p className="mt-0.5 text-xs text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p>{p.completed_at && <CompletionStamp value={p.completed_at} by={p.completed_by ? completionNames[p.completed_by] : undefined} />}</div>
             </div>
             <CardActions property={p} onEdit={onEdit} onDelete={onDelete} onToggleComplete={onToggleComplete} />
           </div>
@@ -589,14 +598,14 @@ function ActionPropertyCard({ property: p, onEdit, onDelete, onToggleComplete }:
   );
 }
 
-function ManagedPropertyCard({ property: p, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
+function ManagedPropertyCard({ property: p, completionNames, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; completionNames: Record<string,string>; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
   const schedule = getTaxSchedule(p);
   return (
     <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${p.completed_at ? "border-emerald-200 opacity-80" : "border-slate-200"}`}>
       <div className="h-0.5 bg-gradient-to-r from-blue-600 to-sky-300" />
       <div className="p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-2.5"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ShieldCheck size={17} /></div><div><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Lender Pays</span></div><p className="mt-0.5 text-xs text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p>{p.completed_at && <CompletionStamp value={p.completed_at} />}</div></div>
+        <div className="flex min-w-0 gap-2.5"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ShieldCheck size={17} /></div><div><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Lender Pays</span></div><p className="mt-0.5 text-xs text-slate-500">{[p.street_address, p.city, p.state, p.zip].filter(Boolean).join(", ")}</p>{p.completed_at && <CompletionStamp value={p.completed_at} by={p.completed_by ? completionNames[p.completed_by] : undefined} />}</div></div>
         <CardActions property={p} onEdit={onEdit} onDelete={onDelete} onToggleComplete={onToggleComplete} />
       </div>
       <div className="mt-2.5 grid grid-cols-2 gap-1.5"><InfoTile label="Estimated value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly tax" value={money(p.annual_property_tax)} accent="amber" /></div>
@@ -720,8 +729,8 @@ function CardActions({ property, onEdit, onDelete, onToggleComplete }: { propert
   return <div className="flex shrink-0 flex-wrap justify-end gap-1"><button onClick={() => onToggleComplete(property)} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold ${property.completed_at ? "border border-slate-200 bg-white text-slate-600" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}><CheckCircle2 size={13} /> {property.completed_at ? "Reopen" : "Mark Complete"}</button><button onClick={() => onEdit(property)} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700"><Pencil size={13} /> Edit</button><button onClick={() => onDelete(property.id)} aria-label="Delete property" className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button></div>;
 }
 
-function CompletionStamp({ value }: { value: string }) {
-  return <p className="mt-1 text-[11px] font-medium text-emerald-700">Completed {new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</p>;
+function CompletionStamp({ value, by }: { value: string; by?: string }) {
+  return <p className="mt-1 text-[11px] font-medium text-emerald-700">{completionLabel(value, by)}</p>;
 }
 
 function SectionHeading({ title, count, subtitle }: { title: string; count: number; subtitle: string }) {
