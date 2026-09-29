@@ -60,6 +60,10 @@ type PropertyRecord = {
   completed_by: string | null;
 };
 
+type TaxCompletion = { property_id: string; tax_cycle: string; installment_number: number; due_date: string; completed_at: string | null; completed_by: string | null };
+type TaxObligation = { id: string; property_id: string; title: string; due_date: string; amount_due: number | null; status: string; completed_at: string | null; completed_by: string | null };
+type TaxInstallment = { number: number; cycle: string; dueDate: string; amount: number | null; obligationId: string | null; completedAt: string | null; completedBy: string | null };
+
 type FormState = {
   name: string;
   street_address: string;
@@ -208,10 +212,11 @@ function getTaxSchedule(p: PropertyRecord): TaxSchedule | null {
   }
 
   if (s === "IN" && c === "tippecanoe") {
-    const taxYear = now > (y === 2026 ? new Date(2026, 10, 10) : shiftWeekendToMonday(new Date(y, 10, 10))) ? y + 1 : y;
-    const spring = taxYear === 2026 ? new Date(2026, 4, 11) : shiftWeekendToMonday(new Date(taxYear, 4, 10));
-    const fall = taxYear === 2026 ? new Date(2026, 10, 10) : shiftWeekendToMonday(new Date(taxYear, 10, 10));
-    return { frequency: "2 installments", cycle: String(taxYear), dueDates: [fmt(spring), fmt(fall)], note: "Spring and fall installments." };
+    const springThisYear = y === 2026 ? new Date(2026, 4, 11, 23, 59, 59) : shiftWeekendToMonday(new Date(y, 4, 10, 23, 59, 59));
+    const start = now > springThisYear ? y : y - 1;
+    const fall = start === 2026 ? new Date(2026, 10, 10) : shiftWeekendToMonday(new Date(start, 10, 10));
+    const spring = start + 1 === 2026 ? new Date(2026, 4, 11) : shiftWeekendToMonday(new Date(start + 1, 4, 10));
+    return { frequency: "2 installments", cycle: `${start}-${String(start + 1).slice(-2)}`, dueDates: [fmt(fall), fmt(spring)], note: "Fall and spring installments. Check the county bill for your exact dates." };
   }
 
   if (s === "FL" && c === "palm beach") {
@@ -227,16 +232,48 @@ function getTaxSchedule(p: PropertyRecord): TaxSchedule | null {
   return null;
 }
 
-function getNextDue(schedule: TaxSchedule | null) {
-  if (!schedule) return "Not entered";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dated = schedule.dueDates
-    .map((label) => ({ label, date: new Date(`${label} 12:00:00`) }))
-    .filter((item) => !Number.isNaN(item.date.getTime()))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
-  const next = dated.find((item) => item.date >= today);
-  return next?.label ?? dated.at(-1)?.label ?? schedule.dueDates[0] ?? "Not entered";
+function installmentDate(label: string) {
+  const date = new Date(`${label} 12:00:00`);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function taxInstallments(property: PropertyRecord, obligations: TaxObligation[], completions: TaxCompletion[]): TaxInstallment[] {
+  const schedule = getTaxSchedule(property);
+  if (!schedule) return [];
+  const startYear = Number(schedule.cycle.slice(0, 4));
+  const linked = obligations.filter(o => o.property_id === property.id && o.due_date >= `${startYear}-07-01` && o.due_date <= `${startYear + 1}-06-30`).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const assigned = new Map<number, TaxObligation>();
+  for (const obligation of linked) {
+    const match = obligation.title.match(/\b([12])(?:st|nd)\s+installment\b/i);
+    if (match) assigned.set(Number(match[1]), obligation);
+  }
+  for (const obligation of linked) {
+    if (Array.from(assigned.values()).some(item => item.id === obligation.id)) continue;
+    const open = schedule.dueDates.map((_, index) => index + 1).find(number => !assigned.has(number));
+    if (open) assigned.set(open, obligation);
+  }
+  return schedule.dueDates.map((label, index) => {
+    const number = index + 1;
+    const obligation = assigned.get(number);
+    const completion = completions.find(item => item.property_id === property.id && item.tax_cycle === schedule.cycle && item.installment_number === number);
+    return {
+      number, cycle: schedule.cycle,
+      dueDate: obligation?.due_date ?? installmentDate(label),
+      amount: obligation?.amount_due ?? (property.annual_property_tax == null ? null : Number(property.annual_property_tax) / schedule.dueDates.length),
+      obligationId: obligation?.id ?? null,
+      completedAt: completion?.completed_at ?? obligation?.completed_at ?? null,
+      completedBy: completion?.completed_by ?? obligation?.completed_by ?? null,
+    };
+  });
+}
+
+function nextInstallmentDue(items: TaxInstallment[]) {
+  const unpaid = items.filter(item => !item.completedAt);
+  if (!unpaid.length) return items.length ? "All paid" : "Not entered";
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const next = unpaid.find(item => item.dueDate >= today) ?? unpaid[0];
+  return formatDate(next.dueDate);
 }
 
 function zillowLookupUrl(address: string) {
@@ -267,6 +304,9 @@ export default function PropertiesPage() {
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState("All");
   const [completionNames, setCompletionNames] = useState<Record<string, string>>({});
+  const [taxCompletions, setTaxCompletions] = useState<TaxCompletion[]>([]);
+  const [taxObligations, setTaxObligations] = useState<TaxObligation[]>([]);
+  const [pendingInstallment, setPendingInstallment] = useState<string | null>(null);
 
   async function getUser() {
     for (let i = 0; i < 6; i += 1) {
@@ -284,13 +324,19 @@ export default function PropertiesPage() {
       router.replace("/");
       return;
     }
-    const { data, error } = await supabase
-      .from("properties")
-      .select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date,completed_at,completed_by")
-      .order("created_at", { ascending: false });
-    if (error) setMessage(error.message);
-    else setProperties((data ?? []) as PropertyRecord[]);
-    const { data: profiles } = await supabase.from("profiles").select("id,email");
+    const [propertyResult, installmentResult, obligationResult, profileResult] = await Promise.all([
+      supabase.from("properties").select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date,completed_at,completed_by").order("created_at", { ascending: false }),
+      supabase.from("property_tax_installments").select("property_id,tax_cycle,installment_number,due_date,completed_at,completed_by"),
+      supabase.from("obligations").select("id,property_id,title,due_date,amount_due,status,completed_at,completed_by").eq("category", "property_tax").not("property_id", "is", null),
+      supabase.from("profiles").select("id,email"),
+    ]);
+    if (propertyResult.error || installmentResult.error || obligationResult.error) setMessage(propertyResult.error?.message ?? installmentResult.error?.message ?? obligationResult.error?.message ?? "Could not load tax installments.");
+    else {
+      setProperties((propertyResult.data ?? []) as PropertyRecord[]);
+      setTaxCompletions((installmentResult.data ?? []) as TaxCompletion[]);
+      setTaxObligations((obligationResult.data ?? []) as TaxObligation[]);
+    }
+    const profiles = profileResult.data;
     setCompletionNames(Object.fromEntries((profiles ?? []).map(p => [p.id, p.email ?? "Family member"])));
     setLoading(false);
   }
@@ -412,14 +458,19 @@ export default function PropertiesPage() {
     else await load();
   }
 
-  async function toggleComplete(property: PropertyRecord) {
-    const completedAt = property.completed_at ? null : new Date().toISOString();
-    const { error } = await supabase.from("properties").update({ completed_at: completedAt, updated_at: new Date().toISOString() }).eq("id", property.id);
+  async function toggleInstallment(property: PropertyRecord, item: TaxInstallment) {
+    const key = `${property.id}:${item.cycle}:${item.number}`;
+    setPendingInstallment(key);
+    const { error } = await supabase.rpc("set_property_tax_installment_status", {
+      p_property_id: property.id, p_tax_cycle: item.cycle, p_installment_number: item.number,
+      p_due_date: item.dueDate, p_complete: !item.completedAt, p_obligation_id: item.obligationId,
+    });
     if (error) setMessage(error.message);
     else {
-      setMessage(completedAt ? `${property.name} marked complete.` : `${property.name} reopened.`);
+      setMessage(`${property.name}: ${item.number === 1 ? "1st" : "2nd"} installment ${item.completedAt ? "reopened" : "marked complete"}.`);
       await load();
     }
+    setPendingInstallment(null);
   }
 
   async function signOut() {
@@ -540,14 +591,14 @@ export default function PropertiesPage() {
               {filter !== "Lender Pays" && (
                 <section>
                   <SectionHeading title="You Pay the Property Tax" count={directPay.length} subtitle="You are responsible for paying the county directly." />
-                  {directPay.length === 0 ? <EmptyState text="No direct-pay properties in this view." /> : <div className="mt-3 space-y-2">{directPay.map((p) => <ActionPropertyCard key={p.id} property={p} completionNames={completionNames} onEdit={edit} onDelete={remove} onToggleComplete={toggleComplete} />)}</div>}
+                  {directPay.length === 0 ? <EmptyState text="No direct-pay properties in this view." /> : <div className="mt-3 space-y-2">{directPay.map((p) => <ActionPropertyCard key={p.id} property={p} completionNames={completionNames} installments={taxInstallments(p, taxObligations, taxCompletions)} pendingInstallment={pendingInstallment} onEdit={edit} onDelete={remove} onToggleInstallment={toggleInstallment} />)}</div>}
                 </section>
               )}
 
               {filter !== "You Pay" && (
                 <section>
                   <SectionHeading title="Lender Pays the Property Tax" count={escrowed.length} subtitle="Your mortgage company handles the tax payment through escrow." />
-                  {escrowed.length === 0 ? <EmptyState text="No escrowed properties in this view." /> : <div className="mt-3 grid gap-2 xl:grid-cols-2">{escrowed.map((p) => <ManagedPropertyCard key={p.id} property={p} completionNames={completionNames} onEdit={edit} onDelete={remove} onToggleComplete={toggleComplete} />)}</div>}
+                  {escrowed.length === 0 ? <EmptyState text="No escrowed properties in this view." /> : <div className="mt-3 grid gap-2 xl:grid-cols-2">{escrowed.map((p) => <ManagedPropertyCard key={p.id} property={p} completionNames={completionNames} installments={taxInstallments(p, taxObligations, taxCompletions)} pendingInstallment={pendingInstallment} onEdit={edit} onDelete={remove} onToggleInstallment={toggleInstallment} />)}</div>}
                 </section>
               )}
             </div>
@@ -558,22 +609,24 @@ export default function PropertiesPage() {
   );
 }
 
-function ActionPropertyCard({ property: p, completionNames, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; completionNames: Record<string,string>; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
+type PropertyCardProps = { property: PropertyRecord; completionNames: Record<string,string>; installments: TaxInstallment[]; pendingInstallment: string | null; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleInstallment: (p: PropertyRecord, item: TaxInstallment) => void };
+
+function ActionPropertyCard({ property: p, completionNames, installments, pendingInstallment, onEdit, onDelete, onToggleInstallment }: PropertyCardProps) {
   const schedule = getTaxSchedule(p);
   const needs = p.property_tax_status === "needs_confirmation";
-  const nextDue = getNextDue(schedule);
+  const nextDue = nextInstallmentDue(installments);
   const checkedDate = p.market_value_checked_at ? new Date(p.market_value_checked_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
 
   return (
-    <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:border-blue-200 ${p.completed_at ? "border-emerald-200 opacity-80" : "border-slate-200"}`}>
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-blue-200">
       <div className="h-0.5 bg-gradient-to-r from-blue-700 via-blue-500 to-sky-300" />
       <div className="p-3 sm:p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex min-w-0 gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Home size={17} /></div>
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">You Pay</span>{needs && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Check tax</span>}</div><PropertyAddress property={p} />{p.completed_at && <CompletionStamp value={p.completed_at} by={p.completed_by ? completionNames[p.completed_by] : undefined} />}</div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">You Pay</span>{needs && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Check tax</span>}</div><PropertyAddress property={p} /></div>
             </div>
-            <CardActions property={p} onEdit={onEdit} onDelete={onDelete} onToggleComplete={onToggleComplete} />
+            <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
           </div>
 
           <div className="mt-3 grid gap-1.5 sm:grid-cols-3">
@@ -582,12 +635,14 @@ function ActionPropertyCard({ property: p, completionNames, onEdit, onDelete, on
             <InfoTile label="Next tax payment due" value={nextDue} accent="rose" />
           </div>
 
+          <InstallmentRows property={p} installments={installments} completionNames={completionNames} pendingInstallment={pendingInstallment} onToggle={onToggleInstallment} />
+
           <section className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Mortgage and insurance</p>
               <MortgageInsuranceSummary property={p} compact />
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500"><span>Plan: {schedule?.frequency ?? "Not entered"}</span><span>Tax year: {p.property_tax_year ?? schedule?.cycle ?? "Not entered"}</span>{p.market_value_source && <span>Value: {p.market_value_source}{checkedDate ? ` · ${checkedDate}` : ""}</span>}</div>
               <PropertySourceButtons property={p} />
-              {schedule && <div className="mt-2 border-t border-slate-200 pt-2"><div className="flex flex-wrap gap-1.5">{schedule.dueDates.map((date) => <span key={date} className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">{date}</span>)}</div><p className="mt-1.5 text-[11px] leading-4 text-slate-500">{schedule.note}</p></div>}
+              {schedule && <p className="mt-2 border-t border-slate-200 pt-2 text-[11px] leading-4 text-slate-500">{schedule.note}</p>}
           </section>
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-2.5">
           <p className="min-w-0 truncate text-[11px] text-slate-500">{p.tax_collector_name ?? (p.county ? `${p.county} County` : "County tax office not entered")}</p>
@@ -598,19 +653,20 @@ function ActionPropertyCard({ property: p, completionNames, onEdit, onDelete, on
   );
 }
 
-function ManagedPropertyCard({ property: p, completionNames, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; completionNames: Record<string,string>; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
+function ManagedPropertyCard({ property: p, completionNames, installments, pendingInstallment, onEdit, onDelete, onToggleInstallment }: PropertyCardProps) {
   const schedule = getTaxSchedule(p);
   return (
-    <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${p.completed_at ? "border-emerald-200 opacity-80" : "border-slate-200"}`}>
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="h-0.5 bg-gradient-to-r from-blue-600 to-sky-300" />
       <div className="p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-2.5"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ShieldCheck size={17} /></div><div><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Lender Pays</span></div><PropertyAddress property={p} />{p.completed_at && <CompletionStamp value={p.completed_at} by={p.completed_by ? completionNames[p.completed_by] : undefined} />}</div></div>
-        <CardActions property={p} onEdit={onEdit} onDelete={onDelete} onToggleComplete={onToggleComplete} />
+        <div className="flex min-w-0 gap-2.5"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ShieldCheck size={17} /></div><div><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Lender Pays</span></div><PropertyAddress property={p} /></div></div>
+        <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
       </div>
       <div className="mt-2.5 grid grid-cols-2 gap-1.5"><InfoTile label="Estimated value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" /><InfoTile label="Yearly tax" value={money(p.annual_property_tax)} accent="amber" /></div>
+      <InstallmentRows property={p} installments={installments} completionNames={completionNames} pendingInstallment={pendingInstallment} onToggle={onToggleInstallment} />
       <section className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5"><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Mortgage and insurance</p><MortgageInsuranceSummary property={p} compact /><PropertySourceButtons property={p} /></section>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-2"><p className="text-[11px] text-slate-500">{schedule?.frequency ?? "Tax schedule not entered"} · <span className="font-semibold text-red-700">Next: {getNextDue(schedule)}</span></p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700">County Tax <ExternalLink size={11} /></a>}</div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 pt-2"><p className="text-[11px] text-slate-500">{schedule?.frequency ?? "Tax schedule not entered"} · <span className="font-semibold text-red-700">Next: {nextInstallmentDue(installments)}</span></p>{p.tax_payment_url && <a href={p.tax_payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700">County Tax <ExternalLink size={11} /></a>}</div>
       </div>
     </article>
   );
@@ -725,8 +781,21 @@ function FinancialValue({ label, value }: { label: string; value: string }) {
   return <div><p className="text-[9px] font-medium uppercase tracking-[0.06em] text-slate-400">{label}</p><p className="mt-0.5 text-xs font-semibold leading-4 text-slate-900">{value}</p></div>;
 }
 
-function CardActions({ property, onEdit, onDelete, onToggleComplete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void; onToggleComplete: (p: PropertyRecord) => void }) {
-  return <div className="flex shrink-0 flex-wrap justify-end gap-1"><button onClick={() => onToggleComplete(property)} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold ${property.completed_at ? "border border-slate-200 bg-white text-slate-600" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}><CheckCircle2 size={13} /> {property.completed_at ? "Reopen" : "Mark Complete"}</button><button onClick={() => onEdit(property)} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700"><Pencil size={13} /> Edit</button><button onClick={() => onDelete(property.id)} aria-label="Delete property" className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button></div>;
+function CardActions({ property, onEdit, onDelete }: { property: PropertyRecord; onEdit: (p: PropertyRecord) => void; onDelete: (id: string) => void }) {
+  return <div className="flex shrink-0 flex-wrap justify-end gap-1"><button onClick={() => onEdit(property)} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700"><Pencil size={13} /> Edit</button><button onClick={() => onDelete(property.id)} aria-label="Delete property" className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button></div>; }
+
+function InstallmentRows({ property, installments, completionNames, pendingInstallment, onToggle }: {
+  property: PropertyRecord; installments: TaxInstallment[]; completionNames: Record<string, string>;
+  pendingInstallment: string | null; onToggle: (p: PropertyRecord, item: TaxInstallment) => void;
+}) {
+  if (!installments.length) return <p className="mt-2 text-xs text-slate-500">Tax installment dates are not entered yet.</p>;
+  return <div className="mt-2 grid gap-1.5 sm:grid-cols-2">{installments.map(item => {
+    const pending = pendingInstallment === `${property.id}:${item.cycle}:${item.number}`;
+    return <div key={`${item.cycle}-${item.number}`} className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border px-2.5 py-2 ${item.completedAt ? "border-emerald-200 bg-emerald-50/70" : "border-blue-100 bg-blue-50/40"}`}>
+      <div className="min-w-0"><p className="text-xs font-semibold text-slate-900">{installments.length === 1 ? "Annual tax payment" : `${item.number === 1 ? "1st" : "2nd"} installment`} <span className="font-normal text-slate-500">· {formatDate(item.dueDate)}</span></p>{item.completedAt ? <CompletionStamp value={item.completedAt} by={item.completedBy ? completionNames[item.completedBy] : undefined} /> : null}</div>
+      <button type="button" disabled={pending || Boolean(pendingInstallment)} onClick={() => onToggle(property, item)} className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-50 ${item.completedAt ? "border border-emerald-200 bg-white text-emerald-800" : "bg-emerald-600 text-white hover:bg-emerald-700"}`}><CheckCircle2 size={12} />{pending ? "Saving..." : item.completedAt ? "Reopen" : "Mark complete"}</button>
+    </div>;
+  })}</div>;
 }
 
 function CompletionStamp({ value, by }: { value: string; by?: string }) {
