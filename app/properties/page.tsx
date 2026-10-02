@@ -26,6 +26,7 @@ import { completionLabel } from "@/lib/completion";
 type PropertyRecord = {
   id: string;
   name: string;
+  property_type: string | null;
   street_address: string;
   city: string | null;
   state: string | null;
@@ -66,6 +67,7 @@ type TaxInstallment = { number: number; cycle: string; dueDate: string; suggeste
 
 type FormState = {
   name: string;
+  property_type: string;
   street_address: string;
   city: string;
   state: string;
@@ -102,6 +104,7 @@ type TaxSchedule = {
 
 const blankForm: FormState = {
   name: "",
+  property_type: "Home",
   street_address: "",
   city: "",
   state: "CA",
@@ -167,6 +170,7 @@ function officialTaxAuthority(state: string, county: string) {
   const c = county.trim().toLowerCase().replace(/ county$/, "");
   if (s === "CA" && c === "san diego") return { name: "San Diego County Treasurer-Tax Collector", url: "https://www.sdttc.com/" };
   if (s === "CA" && c === "alameda") return { name: "Alameda County Treasurer-Tax Collector", url: "https://propertytax.alamedacountyca.gov/search" };
+  if (s === "CA" && c === "san mateo") return { name: "San Mateo County Tax Collector", url: "https://smcgov.org/tax" };
   if (s === "FL" && c === "palm beach") return { name: "Constitutional Tax Collector, Serving Palm Beach County", url: "https://pbctax.publicaccessnow.com/PropertyTax.aspx" };
   if (s === "IN" && c === "tippecanoe") return { name: "Tippecanoe County Treasurer", url: "https://tippecanoe.in.gov/511/Property-Tax-Payments" };
   if (s === "HI" && c === "honolulu") return { name: "City and County of Honolulu - Real Property Tax Collection", url: "https://pay.ehawaii.gov/hnl#!/search/11" };
@@ -190,13 +194,13 @@ function getTaxSchedule(p: PropertyRecord): TaxSchedule | null {
   const now = new Date();
   const y = now.getFullYear();
 
-  if (s === "CA" && (c === "san diego" || c === "alameda")) {
+  if (s === "CA" && (c === "san diego" || c === "alameda" || c === "san mateo")) {
     const start = now > new Date(y, 3, 10, 23, 59, 59) ? y : y - 1;
     return {
       frequency: "2 installments",
       cycle: `${start}-${String(start + 1).slice(-2)}`,
       dueDates: [`Nov 1, ${start}`, `Feb 1, ${start + 1}`],
-      note: "1st installment becomes delinquent after Dec 10; 2nd after Apr 10.",
+      note: c === "san mateo" && start === 2026 ? "2026–27 bill: 1st installment delinquent after Dec 10, 2026; 2nd after Apr 12, 2027." : "1st installment becomes delinquent after Dec 10; 2nd after Apr 10 (or the next business day).",
     };
   }
 
@@ -326,7 +330,7 @@ export default function PropertiesPage() {
       return;
     }
     const [propertyResult, installmentResult, obligationResult, profileResult] = await Promise.all([
-      supabase.from("properties").select("id,name,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date,completed_at,completed_by").order("created_at", { ascending: false }),
+      supabase.from("properties").select("id,name,property_type,street_address,city,state,zip,county,apn,tax_collector_name,tax_payment_url,annual_property_tax,property_tax_year,property_tax_source,property_tax_status,tax_lookup_checked_at,escrowed,notes,estimated_market_value,market_value_source,market_value_source_url,market_value_checked_at,market_value_status,mortgage_servicer,mortgage_balance,mortgage_monthly_payment,mortgage_interest_rate,mortgage_statement_date,mortgage_payment_due_date,insurance_carrier,insurance_annual_premium,insurance_policy_start_date,insurance_policy_expiration_date,completed_at,completed_by").order("created_at", { ascending: false }),
       supabase.from("property_tax_installments").select("property_id,tax_cycle,installment_number,due_date,completed_at,completed_by,amount_paid"),
       supabase.from("obligations").select("id,property_id,title,due_date,amount_due,status,completed_at,completed_by").eq("category", "property_tax").not("property_id", "is", null),
       supabase.from("profiles").select("id,email"),
@@ -357,6 +361,7 @@ export default function PropertiesPage() {
     setEditingId(p.id);
     setForm({
       name: p.name,
+      property_type: p.property_type ?? "Home",
       street_address: p.street_address,
       city: p.city ?? "",
       state: p.state ?? "CA",
@@ -402,6 +407,7 @@ export default function PropertiesPage() {
     const authority = officialTaxAuthority(form.state, form.county);
     const payload = {
       name: form.name.trim(),
+      property_type: form.property_type,
       street_address: form.street_address.trim(),
       city: form.city.trim() || null,
       state: form.state.trim() || null,
@@ -553,6 +559,7 @@ export default function PropertiesPage() {
                   <div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 ring-1 ring-slate-200"><Home size={18} /></div><div><h3 className="text-sm font-semibold">Property details</h3><p className="text-xs text-slate-500">Name and address</p></div></div>
                   <div className="grid gap-5 md:grid-cols-2">
                     <Field label="Property name" required value={form.name} onChange={(v) => updateField("name", v)} />
+                    <SelectField label="Property type" value={form.property_type} options={["Home", "Condo", "Land", "Other"]} onChange={(v) => updateField("property_type", v)} />
                     <Field label="Street address" required value={form.street_address} onChange={(v) => updateField("street_address", v)} />
                     <Field label="City" value={form.city} onChange={(v) => updateField("city", v)} />
                     <div className="grid grid-cols-2 gap-3"><Field label="State" value={form.state} onChange={(v) => updateField("state", v)} /><Field label="ZIP" value={form.zip} onChange={(v) => updateField("zip", v)} /></div>
@@ -646,13 +653,13 @@ function ActionPropertyCard({ property: p, completionNames, installments, pendin
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex min-w-0 gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Home size={17} /></div>
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">You Pay</span>{needs && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Check tax</span>}</div><PropertyAddress property={p} /></div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="font-semibold">{p.name}</h3>{p.property_type === "Land" && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">Land</span>}<span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">You Pay</span>{needs && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Check tax</span>}</div><PropertyAddress property={p} /></div>
             </div>
             <CardActions property={p} onEdit={onEdit} onDelete={onDelete} />
           </div>
 
           <div className="mt-3 grid gap-1.5 sm:grid-cols-3">
-            <InfoTile label="Estimated property value" value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" />
+            <InfoTile label={p.property_type === "Land" ? "Estimated land value" : "Estimated property value"} value={p.estimated_market_value == null ? "Not entered" : money(p.estimated_market_value)} accent="indigo" />
             <InfoTile label="Yearly property tax" value={money(p.annual_property_tax)} accent="amber" />
             <InfoTile label="Next tax payment due" value={nextDue} accent="rose" />
           </div>
@@ -660,8 +667,7 @@ function ActionPropertyCard({ property: p, completionNames, installments, pendin
           <InstallmentRows property={p} installments={installments} completionNames={completionNames} pendingInstallment={pendingInstallment} onToggle={onToggleInstallment} onSaveAmount={onSaveAmount} />
 
           <section className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Mortgage and insurance</p>
-              <MortgageInsuranceSummary property={p} compact />
+            {p.property_type !== "Land" || p.mortgage_servicer || p.insurance_carrier ? <><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Mortgage and insurance</p><MortgageInsuranceSummary property={p} compact /></> : <p className="text-[11px] text-slate-600">Land parcel · no mortgage or insurance entered</p>}
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500"><span>Plan: {schedule?.frequency ?? "Not entered"}</span><span>Tax year: {p.property_tax_year ?? schedule?.cycle ?? "Not entered"}</span>{p.market_value_source && <span>Value: {p.market_value_source}{checkedDate ? ` · ${checkedDate}` : ""}</span>}</div>
               <PropertySourceButtons property={p} />
               {schedule && <p className="mt-2 border-t border-slate-200 pt-2 text-[11px] leading-4 text-slate-500">{schedule.note}</p>}
